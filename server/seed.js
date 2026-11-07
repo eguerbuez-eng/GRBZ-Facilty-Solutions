@@ -37,7 +37,9 @@ export function seed(db, { dataDir, log = console.log } = {}) {
     if (!process.env.GRBZ_ADMIN_PASSWORD && dataDir) {
       const file = path.join(dataDir, 'ERSTZUGANG.txt');
       fs.writeFileSync(file, `GRBZ Facility Management System – Erstzugang\n\nE-Mail:   ${email}\nPasswort: ${password}\n\nDas Passwort muss bei der ersten Anmeldung geändert werden.\nDiese Datei nach der Ersteinrichtung löschen!\n`, { mode: 0o600 });
-      log(`\n  Administratorzugang angelegt: ${email}\n  Einmalpasswort steht in: ${file}\n`);
+      // Einmalpasswort auch im Startprotokoll ausgeben (z. B. Render-Logs), da auf
+      // gehosteten Servern die Datei oft nicht zugänglich ist. Muss beim ersten Login geändert werden.
+      log(`\n  Administratorzugang angelegt\n  E-Mail:   ${email}\n  Passwort: ${password}\n  (Einmalpasswort – muss bei der ersten Anmeldung geändert werden; auch gespeichert in ${file})\n`);
     }
   }
 }
