@@ -11,6 +11,7 @@ import {
   PHOTO_CATEGORIES,
 } from '../shared/constants.js';
 import { todayYmd, addDays, weekday, daysBetween, seasonOf, ymdOf } from '../shared/dates.js';
+import { checklistProblems, autoReport } from '../shared/rules.js';
 
 const GENERIC = ['customers', 'contact_history', 'services', 'objects', 'materials', 'machines', 'winter_areas', 'winter_standby', 'checklist_templates'];
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -140,12 +141,16 @@ function createQr(db, ctx, p) {
   return qr;
 }
 
-function instantiateChecklist(db, order, templateId) {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Checkliste aus Vorlage kopieren. itemIds: optional vom Client vergebene IDs (Offline-Anlage). */
+function instantiateChecklist(db, order, templateId, itemIds = []) {
   const items = templateId
     ? db.all('SELECT * FROM checklist_template_items WHERE template_id = ? AND deleted = 0 ORDER BY position', templateId) : [];
-  items.forEach((it, i) => db.insert('order_checklist_items', {
-    order_id: order.id, position: i, text: it.text, required: it.required, photo_required: it.photo_required,
-  }));
+  items.forEach((it, i) => {
+    const cid = itemIds[i];
+    const id = cid && UUID.test(cid) && !db.byId('order_checklist_items', cid) ? cid : uuid();
+    db.insert('order_checklist_items', { id, order_id: order.id, position: i, text: it.text, required: it.required, photo_required: it.photo_required });
+  });
 }
 
 function defaultTemplateFor(db, serviceId) {
@@ -178,7 +183,7 @@ function createOrder(db, ctx, d, id) {
     scheduled_time: d.scheduled_time || null, planned_minutes: d.planned_minutes ? Math.round(+d.planned_minutes) : null,
     assigned_user_id: d.assigned_user_id || null, status: 'geplant', notes: d.notes || null,
   });
-  instantiateChecklist(db, order, templateId);
+  instantiateChecklist(db, order, templateId, Array.isArray(d.item_ids) ? d.item_ids : []);
   return order;
 }
 
@@ -451,7 +456,7 @@ export const commands = {
       const touched = db.get("SELECT COUNT(*) c FROM order_checklist_items WHERE order_id = ? AND result <> 'offen' AND deleted = 0", id).c;
       if (touched) throw bad('Die Checkliste wurde bereits bearbeitet und kann nicht mehr ausgetauscht werden.');
       db.run('UPDATE order_checklist_items SET deleted = 1, seq = ? WHERE order_id = ?', db.nextSeq(), id);
-      instantiateChecklist(db, row, patch.template_id);
+      instantiateChecklist(db, row, patch.template_id, Array.isArray(data.item_ids) ? data.item_ids : []);
     }
     if (patch.assigned_user_id !== undefined && patch.assigned_user_id !== existing.assigned_user_id) touchOrderTree(db, id);
     db.audit(user.id, 'auftrag.geaendert', 'orders', id, { felder: Object.keys(patch) });
@@ -513,14 +518,7 @@ export const commands = {
     const o = orderForExecution(db, user, id);
     if (o.completed_at) return { row: o }; // idempotent
     const items = db.all('SELECT * FROM order_checklist_items WHERE order_id = ? AND deleted = 0 ORDER BY position', id);
-    const problems = [];
-    for (const it of items) {
-      if (it.required && it.result === 'offen') problems.push(`„${it.text}“ ist noch offen.`);
-      if (['nicht_erledigt', 'mangel'].includes(it.result) && !String(it.comment || '').trim()) problems.push(`„${it.text}“: Bitte einen Kommentar angeben.`);
-      if (it.photo_required && it.result === 'erledigt' && !db.get('SELECT id FROM photos WHERE checklist_item_id = ? AND deleted = 0', it.id)) {
-        problems.push(`„${it.text}“: Foto erforderlich.`);
-      }
-    }
+    const problems = checklistProblems(items, (itemId) => !!db.get('SELECT id FROM photos WHERE checklist_item_id = ? AND deleted = 0', itemId));
     if (problems.length) throw new AppError(422, 'Die Checkliste ist noch nicht vollständig.', { details: problems });
     const hasDefect = items.some((it) => it.result === 'mangel');
     const report = String(final_report || '').trim() || autoReport(items);
@@ -800,7 +798,7 @@ export const commands = {
       score, rating: ratingText(score), notes: p.notes || null, customer_visible: p.customer_visible ? 1 : 0,
     });
     items.forEach((i, idx) => {
-      db.insert('inspection_items', { inspection_id: ins.id, position: idx, text: String(i.text).slice(0, 300), rating: rated.includes(i) ? +i.rating : null, comment: i.comment || null });
+      db.insert('inspection_items', { id: i.id && UUID.test(i.id) && !db.byId('inspection_items', i.id) ? i.id : uuid(), inspection_id: ins.id, position: idx, text: String(i.text).slice(0, 300), rating: rated.includes(i) ? +i.rating : null, comment: i.comment || null });
       if (i.create_defect) {
         const d = db.insert('defects', {
           defect_no: numberFor(db, 'defects'), kind: 'mangel', customer_id: obj.customer_id, object_id: obj.id, inspection_id: ins.id,
@@ -1010,15 +1008,6 @@ function syncJunction(db, table, ownerCol, ownerId, refCol, ids) {
     want.delete(r[refCol]);
   }
   for (const id of want) db.insert(table, { [ownerCol]: ownerId, [refCol]: id });
-}
-
-function autoReport(items) {
-  const count = (r) => items.filter((i) => i.result === r).length;
-  const parts = [`${count('erledigt')} von ${items.length} Punkten erledigt`];
-  if (count('nicht_zutreffend')) parts.push(`${count('nicht_zutreffend')} nicht zutreffend`);
-  if (count('nicht_erledigt')) parts.push(`${count('nicht_erledigt')} nicht erledigt`);
-  if (count('mangel')) parts.push(`${count('mangel')} Mangel/Mängel festgestellt`);
-  return parts.join(', ') + '.';
 }
 
 /** Führt einen Befehl transaktional aus. */

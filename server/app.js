@@ -464,6 +464,19 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
 
   // ---------- QR-Link & PWA ----------
   app.get('/q/:token', (req, res) => res.redirect(302, `/#/q/${encodeURIComponent(req.params.token)}`));
+  // Service Worker mit automatischer Versionskennung (Hash aller App-Dateien)
+  const swVersion = (() => {
+    const hash = crypto.createHash('sha256');
+    const walk = (dir) => { for (const f of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const p = path.join(dir, f.name); if (f.isDirectory()) walk(p); else hash.update(f.name).update(fs.readFileSync(p)); } };
+    walk(path.join(ROOT, 'public')); walk(path.join(ROOT, 'shared'));
+    return `grbz-${VERSION}-${hash.digest('hex').slice(0, 10)}`;
+  })();
+  const swSource = fs.readFileSync(path.join(ROOT, 'public', 'sw.js'), 'utf8').replace(/const VERSION = '[^']*';/, `const VERSION = '${swVersion}';`);
+  app.get('/sw.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.type('application/javascript').send(swSource);
+  });
   app.get('/vendor/jsQR.js', (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(path.join(ROOT, 'node_modules/jsqr/dist/jsQR.js')); });
   const staticOpts = { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') };
   app.use('/shared', express.static(path.join(ROOT, 'shared'), staticOpts));

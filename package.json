@@ -11,7 +11,7 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 tests/*.test.js",
-    "test:e2e": "node --disable-warning=ExperimentalWarning tests-e2e/e2e.mjs",
+    "test:e2e": "NODE_PATH=\"$(npm root -g)\" node --disable-warning=ExperimentalWarning tests-e2e/e2e.mjs",
     "backup": "node --disable-warning=ExperimentalWarning server/backup.js",
     "create-admin": "node --disable-warning=ExperimentalWarning server/create-admin.js"
   },
