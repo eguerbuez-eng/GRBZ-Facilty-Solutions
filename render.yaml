@@ -1,0 +1,21 @@
+# Ein-Klick-Testserver auf Render.com (kostenloser Tarif).
+# Hinweis: Im kostenlosen Tarif werden die Daten bei Neustart/Neuinstallation gelöscht –
+# nur zum Testen geeignet. Für den Echtbetrieb siehe docs/INSTALLATION.md.
+services:
+  - type: web
+    name: grbz-fms
+    runtime: node
+    plan: free
+    branch: claude/cool-heisenberg-0ogzv3
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: GRBZ_TRUST_PROXY
+        value: "1"
+      - key: GRBZ_ADMIN_EMAIL
+        sync: false
+      - key: GRBZ_ADMIN_PASSWORD
+        sync: false
