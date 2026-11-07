@@ -1,20 +1,31 @@
-# Ein-Klick-Testserver auf Render.com (kostenloser Tarif).
-# Hinweis: Im kostenlosen Tarif werden die Daten bei Neustart/Neuinstallation gelöscht –
-# nur zum Testen geeignet. Für den Echtbetrieb siehe docs/INSTALLATION.md.
+# Hosting auf Render.com – kein eigener Server nötig.
+#
+# TESTBETRIEB (Standard, kostenlos): Daten werden bei Neustart/Update gelöscht.
+#
+# DAUERBETRIEB: unten "plan: free" durch "plan: starter" ersetzen und die
+# auskommentierten Zeilen (disk + GRBZ_DATA_DIR) aktivieren. Dann bleiben
+# Datenbank und Fotos dauerhaft auf einem Speicher in Frankfurt erhalten.
 services:
   - type: web
     name: grbz-fms
     runtime: node
     plan: free
+    region: frankfurt
     branch: claude/cool-heisenberg-0ogzv3
     buildCommand: npm install --omit=dev
     startCommand: npm start
     healthCheckPath: /api/health
+    # disk:
+    #   name: grbz-daten
+    #   mountPath: /var/data
+    #   sizeGB: 5
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: GRBZ_TRUST_PROXY
         value: "1"
+      # - key: GRBZ_DATA_DIR
+      #   value: /var/data
       - key: GRBZ_ADMIN_EMAIL
         sync: false
       - key: GRBZ_ADMIN_PASSWORD
