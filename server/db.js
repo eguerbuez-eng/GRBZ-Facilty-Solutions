@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { SYNC_TABLES } from '../shared/entities.js';
+import { migrate } from './migrations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,14 +20,17 @@ export class AppError extends Error {
   }
 }
 
-export function openDb(file) {
+export function openDb(file, { log } = {}) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
-  for (const t of SYNC_TABLES) db.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_seq ON ${t}(seq)`);
   db.prepare("INSERT OR IGNORE INTO counters(name, value) VALUES ('seq', 0)").run();
-  return wrap(db);
+  const api = wrap(db);
+  api.migration = migrate(api, file, log);
+  columnCache.clear();
+  for (const t of SYNC_TABLES) db.exec(`CREATE INDEX IF NOT EXISTS idx_${t}_seq ON ${t}(seq)`);
+  return api;
 }
 
 const columnCache = new Map();

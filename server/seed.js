@@ -3,7 +3,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { hashPassword } from './auth.js';
-import { DEFAULT_SERVICES, DEFAULT_CHECKLISTS, DEFAULT_INSPECTION_ITEMS, COMPANY } from '../shared/constants.js';
+import { DEFAULT_SERVICES, DEFAULT_CHECKLISTS, DEFAULT_INSPECTION_ITEMS, COMPANY, ROLES, ROLE_PERMISSIONS, SCOPED_ROLES, DEFAULT_EMPLOYMENT_TYPES, DEFAULT_POSITIONS, DEFAULT_DEPARTMENTS } from '../shared/constants.js';
+import { fmtPersonnelNo } from '../shared/hr.js';
 
 export function seed(db, { dataDir, log = console.log } = {}) {
   db.tx(() => {
@@ -22,6 +23,27 @@ export function seed(db, { dataDir, log = console.log } = {}) {
       const q = db.insert('checklist_templates', { name: 'Standard-Objektkontrolle', purpose: 'kontrolle', active: 1 });
       DEFAULT_INSPECTION_ITEMS.forEach((text, i) => db.insert('checklist_template_items', { template_id: q.id, position: i, text, required: 1 }));
     }
+
+    // Personalverwaltung: Standardrollen und Kategorien (nur beim ersten Mal; danach frei änderbar)
+    if (!db.get('SELECT id FROM roles LIMIT 1')) {
+      Object.entries(ROLES).forEach(([key, name], i) => db.insert('roles', {
+        role_key: key, name, permissions: JSON.stringify(ROLE_PERMISSIONS[key] || []), scoped: SCOPED_ROLES.includes(key) ? 1 : 0,
+        system: 1, active: 1, sort: i * 10,
+      }));
+    }
+    for (const [table, list] of [['employment_types', DEFAULT_EMPLOYMENT_TYPES], ['positions', DEFAULT_POSITIONS], ['departments', DEFAULT_DEPARTMENTS]]) {
+      if (!db.get(`SELECT id FROM ${table} LIMIT 1`)) list.forEach((name, i) => db.insert(table, { name, active: 1, sort: i * 10 }));
+    }
+    if (!db.get('SELECT id FROM work_models LIMIT 1')) {
+      // Beispielmodelle ohne gesetzliche Annahmen – Stunden frei anpassbar
+      db.insert('work_models', { name: 'Montag–Freitag, 8 Std./Tag', day_minutes: JSON.stringify([480, 480, 480, 480, 480, 0, 0]), holidays_reduce: 1, active: 1 });
+      db.insert('work_models', { name: 'Montag–Freitag, 4 Std./Tag', day_minutes: JSON.stringify([240, 240, 240, 240, 240, 0, 0]), holidays_reduce: 1, active: 1 });
+      db.insert('work_models', { name: 'Flexibel (keine feste Soll-Zeit)', day_minutes: JSON.stringify([0, 0, 0, 0, 0, 0, 0]), holidays_reduce: 0, active: 1 });
+    }
+    // Personalakte für jeden Mitarbeiter ohne Akte (auch Bestandsdaten nach Migration)
+    for (const u of db.all("SELECT id, active FROM users WHERE role <> 'kunde' AND id NOT IN (SELECT user_id FROM employee_profiles)")) {
+      db.insert('employee_profiles', { id: u.id, user_id: u.id, status: u.active ? 'aktiv' : 'inaktiv', pay_type: 'keine' });
+    }
   });
 
   if (!db.get("SELECT id FROM users WHERE role = 'admin' AND deleted = 0 LIMIT 1")) {
@@ -29,9 +51,11 @@ export function seed(db, { dataDir, log = console.log } = {}) {
     const password = process.env.GRBZ_ADMIN_PASSWORD || generatePassword();
     db.tx(() => {
       db.insert('users', {
-        employee_no: 'MA-' + String(db.nextNumber('employee')).padStart(3, '0'), name: 'Administrator', email, role: 'admin',
+        employee_no: fmtPersonnelNo(db.nextNumber('personnel')), name: 'Administrator', email, role: 'admin',
         password_hash: hashPassword(password), must_change_password: 1, active: 1,
       });
+      const a = db.get("SELECT id FROM users WHERE email = ?", email);
+      if (!db.byId('employee_profiles', a.id)) db.insert('employee_profiles', { id: a.id, user_id: a.id, status: 'aktiv', pay_type: 'keine' });
     });
     db.audit(null, 'ersteinrichtung.admin', 'users', null, { email });
     if (!process.env.GRBZ_ADMIN_PASSWORD && dataDir) {

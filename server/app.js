@@ -12,6 +12,12 @@ import {
   SESSION_COOKIE, publicUser, hashPassword, verifyPassword, validatePasswordStrength,
 } from './auth.js';
 import { runCommand, generateAllRecurrences, numberFor } from './commands.js';
+import './commands-hr.js';
+import { vacationInfo } from './commands-hr.js';
+import { computeCosts, computeEmployeeMonth, timeAccount } from './payroll.js';
+import { DISCLAIMER } from '../shared/hr.js';
+import { createPdf, finalize, heading, keyValues, paragraph, table, pdfToBuffer } from './pdf.js';
+import { sendCsv } from './reports.js';
 import { selectScoped, canSee, assertSee, isScoped, tableScope } from './scope.js';
 import { reportsRouter } from './reports.js';
 import { seed } from './seed.js';
@@ -48,7 +54,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     backups: path.join(dataDir, 'backups'),
   };
   for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });
-  const db = openDb(dbFile || path.join(dataDir, 'grbz.sqlite'));
+  const db = openDb(dbFile || path.join(dataDir, 'grbz.sqlite'), { log });
   seed(db, { dataDir, log });
 
   const app = express();
@@ -215,7 +221,8 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
       const staff = db.all("SELECT id, name, role FROM users WHERE deleted = 0 AND active = 1 AND role <> 'kunde' ORDER BY name");
       const active = new Set(db.all("SELECT user_id FROM time_entries WHERE kind = 'arbeit' AND end_at IS NULL AND voided = 0 AND deleted = 0").map((r) => r.user_id));
       const paused = new Set(db.all("SELECT user_id FROM time_entries WHERE kind = 'pause' AND end_at IS NULL AND voided = 0 AND deleted = 0").map((r) => r.user_id));
-      out.staff = staff.map((s) => ({ ...s, role_label: ROLES[s.role], status: paused.has(s.id) ? 'pause' : active.has(s.id) ? 'aktiv' : 'abwesend',
+      const roleNames = Object.fromEntries(db.all('SELECT role_key, name FROM roles').map((r) => [r.role_key, r.name]));
+      out.staff = staff.map((s) => ({ ...s, role_label: roleNames[s.role] || ROLES[s.role] || s.role, status: paused.has(s.id) ? 'pause' : active.has(s.id) ? 'aktiv' : 'abwesend',
         today: orders.filter((o) => o.assigned_user_id === s.id && o.scheduled_date === today).length }));
     }
     if (can(u, 'materials.read')) {
@@ -290,7 +297,8 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     const b = req.body;
     const title = String(b.title || f.originalname || '').trim().slice(0, 200);
     if (!title) throw new AppError(400, 'Bitte einen Titel angeben.');
-    for (const [k, t] of [['customer_id', 'customers'], ['object_id', 'objects'], ['order_id', 'orders'], ['machine_id', 'machines']]) {
+    if (b.user_id && !can(req.user, 'hr.manage')) throw new AppError(403, 'Personaldokumente erfordern das Recht „Personalakten bearbeiten“.');
+    for (const [k, t] of [['customer_id', 'customers'], ['object_id', 'objects'], ['order_id', 'orders'], ['machine_id', 'machines'], ['user_id', 'users']]) {
       if (b[k] && !db.get(`SELECT id FROM ${t} WHERE id = ?`, b[k])) throw new AppError(400, 'Zuordnung ungültig.');
     }
     const id = /^[0-9a-f-]{36}$/i.test(b.id || '') ? b.id : uuid();
@@ -301,7 +309,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     if (!customerId && b.object_id) customerId = db.byId('objects', b.object_id)?.customer_id || null;
     const row = db.tx(() => db.insert('documents', {
       id, title, kind: String(b.kind || 'sonstiges').slice(0, 40), customer_id: customerId, object_id: b.object_id || null,
-      order_id: b.order_id || null, machine_id: b.machine_id || null, file_name: name, original_name: String(f.originalname || '').slice(0, 200),
+      order_id: b.order_id || null, machine_id: b.machine_id || null, user_id: b.user_id || null, file_name: name, original_name: String(f.originalname || '').slice(0, 200),
       mime: f.mimetype, size: f.size, sha256: crypto.createHash('sha256').update(f.buffer).digest('hex'), uploaded_by: req.user.id,
       customer_visible: b.customer_visible === '1' ? 1 : 0, notes: b.notes || null,
     }));
@@ -309,15 +317,15 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     res.json({ row });
   });
 
-  app.get('/api/documents/:id/file', requirePerm('documents.read'), (req, res) => {
+  app.get('/api/documents/:id/file', requirePerm('documents.read', 'hr.read'), (req, res) => {
     const d = db.byId('documents', req.params.id);
-    if (!d || d.deleted) throw new AppError(404, 'Dokument nicht gefunden.');
+    if (!d || d.deleted || !canSee(db, req.user, 'documents', d.id)) throw new AppError(404, 'Dokument nicht gefunden.');
     sendDocument(res, d, dirs);
   });
 
   // ---------- Mitarbeiter / Benutzer ----------
   app.get('/api/users', requirePerm('users.read'), (_req, res) => {
-    res.json({ users: db.all("SELECT id, employee_no, name, email, phone, street, zip, city, entry_date, role, customer_id, active, last_login_at, notes, created_at FROM users WHERE deleted = 0 ORDER BY active DESC, name") });
+    res.json({ users: db.all("SELECT id, employee_no, legacy_employee_no, name, email, phone, street, zip, city, entry_date, role, customer_id, active, last_login_at, notes, created_at FROM users WHERE deleted = 0 ORDER BY active DESC, name") });
   });
 
   const USER_FIELDS = ['name', 'email', 'phone', 'street', 'zip', 'city', 'entry_date', 'role', 'customer_id', 'notes', 'active'];
@@ -330,7 +338,14 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
       const dupe = db.get('SELECT id FROM users WHERE email = ? AND id <> ?', out.email, existing?.id || '');
       if (dupe) throw new AppError(400, 'Diese E-Mail-Adresse wird bereits verwendet.');
     }
-    if ('role' in out && !ROLES[out.role]) throw new AppError(400, 'Ungültige Rolle.');
+    if ('role' in out) {
+      const role = db.get('SELECT * FROM roles WHERE role_key = ? AND deleted = 0', out.role || '');
+      if (!role || !role.active) throw new AppError(400, 'Ungültige oder deaktivierte Rolle.');
+      // Keine Rechteausweitung: Nicht-Administratoren dürfen nur Rollen vergeben, deren Rechte sie selbst besitzen
+      if (req.user.role !== 'admin' && JSON.parse(role.permissions).some((p) => !can(req.user, p))) {
+        throw new AppError(403, 'Diese Rolle hat Rechte, die Sie selbst nicht besitzen.');
+      }
+    }
     const privileged = ['admin', 'geschaeftsfuehrer'];
     if (req.user.role !== 'admin' && (privileged.includes(out.role) || privileged.includes(existing?.role))) {
       throw new AppError(403, 'Nur Administratoren dürfen Administrator- und Geschäftsführerkonten verwalten.');
@@ -352,7 +367,11 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     if (pw) { const e = validatePasswordStrength(pw); if (e) throw new AppError(400, e); }
     const generated = !pw;
     if (!pw) pw = oneTimePassword();
-    const row = db.tx(() => db.insert('users', { ...data, employee_no: numberFor(db, 'users'), password_hash: hashPassword(pw), must_change_password: 1, active: 1 }));
+    const row = db.tx(() => {
+      const u = db.insert('users', { ...data, employee_no: data.role === 'kunde' ? null : numberFor(db, 'users'), password_hash: hashPassword(pw), must_change_password: 1, active: 1 });
+      if (u.role !== 'kunde') db.insert('employee_profiles', { id: u.id, user_id: u.id, status: 'aktiv', pay_type: 'keine' });
+      return u;
+    });
     db.audit(req.user.id, 'benutzer.erstellt', 'users', row.id, { rolle: row.role });
     res.json({ user: { ...row, password_hash: undefined }, one_time_password: generated ? pw : undefined });
   });
@@ -371,6 +390,23 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     res.json({ user: { ...row, password_hash: undefined } });
   });
 
+  // Mitarbeiter löschen: Datensatz bleibt (Historie, Zeiten), Personalnummer wird nie neu vergeben
+  app.delete('/api/users/:id', requirePerm('users.manage'), (req, res) => {
+    const ex = db.byId('users', req.params.id);
+    if (!ex || ex.deleted) throw new AppError(404, 'Benutzer nicht gefunden.');
+    if (ex.id === req.user.id) throw new AppError(400, 'Sie können sich nicht selbst löschen.');
+    if (req.user.role !== 'admin' && ['admin', 'geschaeftsfuehrer'].includes(ex.role)) throw new AppError(403, 'Keine Berechtigung.');
+    if (ex.role === 'admin' && db.get("SELECT COUNT(*) c FROM users WHERE role = 'admin' AND active = 1 AND deleted = 0 AND id <> ?", ex.id).c < 1) throw new AppError(400, 'Es muss mindestens ein aktiver Administrator bestehen bleiben.');
+    db.tx(() => {
+      db.update('users', ex.id, { deleted: 1, active: 0 });
+      const p = db.byId('employee_profiles', ex.id);
+      if (p) db.update('employee_profiles', p.id, { status: 'ausgeschieden' });
+    });
+    db.run('DELETE FROM sessions WHERE user_id = ?', ex.id);
+    db.audit(req.user.id, 'benutzer.geloescht', 'users', ex.id, { nr: ex.employee_no });
+    res.json({ ok: true });
+  });
+
   app.post('/api/users/:id/reset-password', requirePerm('users.manage'), (req, res) => {
     const ex = db.byId('users', req.params.id);
     if (!ex || ex.deleted) throw new AppError(404, 'Benutzer nicht gefunden.');
@@ -380,6 +416,66 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     db.run('DELETE FROM sessions WHERE user_id = ?', ex.id);
     db.audit(req.user.id, 'benutzer.passwort_zurueckgesetzt', 'users', ex.id);
     res.json({ one_time_password: pw });
+  });
+
+  // ---------- Personalverwaltung: Auswertungen ----------
+  const monthOf = (q) => (/^\d{4}-\d{2}$/.test(q || '') ? q : todayYmd().slice(0, 7));
+  const selfOr = (req, perm) => { if (req.params.id !== req.user.id) requirePermSync(req.user, perm); };
+  function requirePermSync(user, perm) { if (!can(user, perm)) throw new AppError(403, 'Für diese Aktion fehlt Ihnen die Berechtigung.'); }
+  function staffUser(id) { const u = db.byId('users', id); if (!u || u.role === 'kunde') throw new AppError(404, 'Mitarbeiter nicht gefunden.'); return u; }
+
+  app.get('/api/personnel/costs', requirePerm('hr.salary'), (req, res) => {
+    res.json({ ...computeCosts(db, monthOf(req.query.month)), disclaimer: DISCLAIMER });
+  });
+  app.get('/api/personnel/:id/month', (req, res) => {
+    selfOr(req, 'hr.read'); staffUser(req.params.id);
+    const r = computeEmployeeMonth(db, req.params.id, monthOf(req.query.month));
+    if (!can(req.user, 'hr.salary')) { delete r.amounts; delete r.lines; delete r.per_object; r.warnings = []; }
+    res.json({ ...r, disclaimer: DISCLAIMER });
+  });
+  app.get('/api/personnel/:id/account', (req, res) => {
+    selfOr(req, 'hr.read'); staffUser(req.params.id);
+    const year = /^\d{4}$/.test(req.query.year || '') ? +req.query.year : +todayYmd().slice(0, 4);
+    res.json(timeAccount(db, req.params.id, year));
+  });
+  app.get('/api/personnel/:id/vacation', (req, res) => {
+    selfOr(req, 'hr.read'); staffUser(req.params.id);
+    res.json(vacationInfo(db, req.params.id, /^\d{4}$/.test(req.query.year || '') ? req.query.year : todayYmd().slice(0, 4)));
+  });
+  app.get('/api/export/personalkosten.csv', requirePerm('hr.salary'), (req, res) => {
+    const c = computeCosts(db, monthOf(req.query.month));
+    const rows = [['Personalnr.', 'Name', 'Soll Std.', 'Ist Std.', 'Gearbeitet Std.', 'Überstunden', 'Grundvergütung', 'Überstunden €', 'Zuschläge €', 'Objektvergütung €', 'Fahrt €', 'Boni €', 'Abzüge €', 'Brutto intern €', 'AG-Aufschlag €', 'Personalkosten €', '€/Std.']];
+    for (const e of c.employees) rows.push([e.employee_no, e.name, e.hours.soll, e.hours.ist, e.hours.worked, e.hours.overtime, e.amounts.base, e.amounts.overtime, e.amounts.surcharges, e.amounts.object, e.amounts.travel, e.amounts.bonus, e.amounts.deduction, e.amounts.gross, e.amounts.markup, e.amounts.total, e.amounts.per_hour ?? ''].map((v) => (typeof v === 'number' ? String(v).replace('.', ',') : v)));
+    rows.push([]); rows.push([DISCLAIMER]);
+    db.audit(req.user.id, 'export.personalkosten', null, null, { monat: c.month });
+    sendCsv(res, `Personalkosten_${c.month}.csv`, rows);
+  });
+  app.get('/api/reports/personalkosten', requirePerm('hr.salary'), async (req, res) => {
+    const c = computeCosts(db, monthOf(req.query.month));
+    const logo = db.setting('logo_file');
+    const doc = createPdf({ title: 'Personalkostenübersicht (intern)', subtitle: c.month, company: db.setting('company_name'), logoPath: logo ? path.join(dirs.branding, logo) : null });
+    const eur = (v) => (v == null ? '–' : new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(v));
+    paragraph(doc, DISCLAIMER, { size: 8, color: '#B54708' });
+    heading(doc, 'Summen');
+    keyValues(doc, [['Personalkosten gesamt', eur(c.totals.total)], ['Gearbeitete Stunden', String(c.totals.hours).replace('.', ',')], ['Kosten je Arbeitsstunde', eur(c.totals.per_hour)], ['Überstundenkosten', eur(c.totals.overtime_cost)], ['Zuschläge', eur(c.totals.surcharges)], ['Überstunden (Std.)', String(c.totals.overtime_hours).replace('.', ',')]]);
+    heading(doc, 'Je Mitarbeiter');
+    table(doc, [
+      { label: 'Nr.', width: 50, key: 'employee_no' }, { label: 'Name', get: (e) => e.name },
+      { label: 'Std.', width: 45, align: 'right', get: (e) => String(e.hours.worked).replace('.', ',') }, { label: 'Ü-Std.', width: 45, align: 'right', get: (e) => String(e.hours.overtime).replace('.', ',') },
+      { label: 'Brutto intern', width: 75, align: 'right', get: (e) => eur(e.amounts.gross) }, { label: 'Kosten', width: 75, align: 'right', get: (e) => eur(e.amounts.total) },
+      { label: '€/Std.', width: 55, align: 'right', get: (e) => eur(e.amounts.per_hour) },
+    ], c.employees);
+    heading(doc, 'Je Objekt');
+    table(doc, [
+      { label: 'Objekt', get: (o) => o.name }, { label: 'Std.', width: 50, align: 'right', get: (o) => String(o.hours ?? '').replace('.', ',') },
+      { label: 'Kosten', width: 80, align: 'right', get: (o) => eur(o.cost) }, { label: 'Umsatz', width: 80, align: 'right', get: (o) => eur(o.revenue) },
+      { label: 'Anteil', width: 55, align: 'right', get: (o) => (o.ratio == null ? '–' : `${String(o.ratio).replace('.', ',')} %`) },
+    ], c.objects);
+    finalize(doc);
+    const buf = await pdfToBuffer(doc);
+    db.audit(req.user.id, 'bericht.personalkosten', null, null, { monat: c.month });
+    res.type('application/pdf').setHeader('Content-Disposition', `inline; filename="Personalkosten ${c.month}.pdf"`);
+    res.send(buf);
   });
 
   // ---------- Historie / Protokoll ----------

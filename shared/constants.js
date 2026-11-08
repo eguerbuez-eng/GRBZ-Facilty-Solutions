@@ -4,11 +4,16 @@ export const APP_NAME = 'GRBZ Facility Management System';
 export const COMPANY = 'GRBZ Facility Solutions';
 export const TIMEZONE = 'Europe/Berlin';
 
+// Standardrollen (Ausgangszustand). Rollen und Rechte sind über die Oberfläche
+// änderbar und werden in der Tabelle `roles` gespeichert.
 export const ROLES = {
   admin: 'Administrator',
   geschaeftsfuehrer: 'Geschäftsführer',
   objektleiter: 'Objektleiter',
+  vorarbeiter: 'Vorarbeiter',
   mitarbeiter: 'Mitarbeiter',
+  minijobber: 'Minijobber',
+  aushilfe: 'Aushilfe',
   kunde: 'Kunde (Portal)',
 };
 
@@ -30,6 +35,8 @@ const ALL = [
   'reports.create',
   'audit.read',
   'settings.manage',
+  'hr.read', 'hr.manage', 'hr.salary', 'hr.rules', 'roles.manage',
+  'planning.manage', 'shifts.own', 'absences.request', 'absences.manage',
 ];
 
 export const PERMISSION_LABELS = {
@@ -50,7 +57,21 @@ export const PERMISSION_LABELS = {
   'reports.create': 'Berichte erstellen',
   'audit.read': 'Protokoll einsehen',
   'settings.manage': 'Systemeinstellungen',
+  'hr.read': 'Personalakten ansehen', 'hr.manage': 'Personalakten bearbeiten', 'hr.salary': 'Löhne, Gehälter und Personalkosten',
+  'hr.rules': 'Berechnungsmodelle verwalten', 'roles.manage': 'Rollen und Rechte verwalten',
+  'planning.manage': 'Dienst- und Schichtplanung', 'shifts.own': 'Eigenen Dienstplan ansehen',
+  'absences.request': 'Eigene Abwesenheiten beantragen', 'absences.manage': 'Abwesenheiten genehmigen und erfassen',
 };
+
+export const PERMISSION_GROUPS = [
+  ['Allgemein', ['dashboard.view', 'reports.create', 'audit.read', 'settings.manage']],
+  ['Kunden & Objekte', ['customers.read', 'customers.write', 'objects.read', 'objects.write', 'qr.manage', 'qr.scan', 'documents.read', 'documents.write']],
+  ['Aufträge', ['orders.read', 'orders.write', 'orders.execute', 'checklists.manage', 'photos.read', 'photos.write', 'photos.release']],
+  ['Personal', ['users.read', 'users.manage', 'roles.manage', 'hr.read', 'hr.manage', 'hr.salary', 'hr.rules', 'planning.manage', 'shifts.own', 'absences.request', 'absences.manage']],
+  ['Zeiterfassung', ['time.own', 'time.all', 'time.approve']],
+  ['Material & Maschinen', ['materials.read', 'materials.write', 'materials.consume', 'machines.read', 'machines.write']],
+  ['Qualität & Winterdienst', ['quality.read', 'quality.write', 'defects.report', 'winter.read', 'winter.write', 'winter.execute']],
+];
 
 export const ROLE_PERMISSIONS = {
   admin: ALL,
@@ -65,22 +86,59 @@ export const ROLE_PERMISSIONS = {
     'quality.read', 'quality.write', 'defects.report',
     'winter.read', 'winter.write', 'winter.execute',
     'documents.read', 'documents.write', 'reports.create',
+    'hr.read', 'planning.manage', 'shifts.own', 'absences.request', 'absences.manage',
+  ],
+  vorarbeiter: [
+    'dashboard.view', 'objects.read', 'qr.scan', 'orders.read', 'orders.execute', 'users.read',
+    'photos.read', 'photos.write', 'time.own', 'materials.read', 'materials.consume',
+    'machines.read', 'quality.read', 'quality.write', 'defects.report', 'winter.read', 'winter.execute', 'reports.create',
+    'shifts.own', 'absences.request',
   ],
   mitarbeiter: [
     'dashboard.view', 'objects.read', 'qr.scan', 'orders.read', 'orders.execute',
     'photos.read', 'photos.write', 'time.own', 'materials.read', 'materials.consume',
     'machines.read', 'defects.report', 'winter.read', 'winter.execute', 'reports.create',
+    'shifts.own', 'absences.request',
+  ],
+  minijobber: [
+    'dashboard.view', 'objects.read', 'qr.scan', 'orders.read', 'orders.execute',
+    'photos.read', 'photos.write', 'time.own', 'materials.read', 'materials.consume', 'defects.report',
+    'winter.read', 'winter.execute', 'shifts.own', 'absences.request',
+  ],
+  aushilfe: [
+    'dashboard.view', 'objects.read', 'qr.scan', 'orders.read', 'orders.execute',
+    'photos.read', 'photos.write', 'time.own', 'materials.consume', 'materials.read', 'defects.report', 'shifts.own',
   ],
   kunde: [],
 };
 
-// Mitarbeiter sehen nur zugeordnete Objekte/Aufträge (Zeilenfilter serverseitig).
-export const SCOPED_ROLES = ['mitarbeiter'];
+// Rollen, die nur zugeordnete Objekte/Aufträge sehen (Standard; je Rolle einstellbar).
+export const SCOPED_ROLES = ['vorarbeiter', 'mitarbeiter', 'minijobber', 'aushilfe'];
 
+/** Berechtigung prüfen. user.permissions (aus der Rollen-Tabelle) hat Vorrang. */
 export function can(user, perm) {
   if (!user) return false;
-  return (ROLE_PERMISSIONS[user.role] || []).includes(perm);
+  const perms = Array.isArray(user.permissions) ? user.permissions : ROLE_PERMISSIONS[user.role] || [];
+  return perms.includes(perm);
 }
+
+export const DEFAULT_EMPLOYMENT_TYPES = ['Geschäftsführer', 'Vollzeit', 'Teilzeit', 'Minijobber', 'Midijobber', 'Werkstudent', 'Aushilfe', 'Saisonkraft', 'Befristet', 'Sonstige'];
+export const DEFAULT_POSITIONS = ['Geschäftsführer', 'Administrator', 'Bereichsleiter', 'Objektleiter', 'Vorarbeiter', 'Reinigungskraft', 'Glasreiniger', 'Hausmeister', 'Gartenpflege', 'Winterdienst', 'Springer', 'Verwaltung'];
+export const DEFAULT_DEPARTMENTS = ['Verwaltung', 'Unterhaltsreinigung', 'Glasreinigung', 'Hausmeisterservice', 'Winterdienst'];
+
+export const EMPLOYEE_STATUS = {
+  aktiv: 'Aktiv', probezeit: 'Probezeit', beurlaubt: 'Beurlaubt', elternzeit: 'Elternzeit',
+  langzeitkrank: 'Langzeiterkrankt', ausgeschieden: 'Ausgeschieden', inaktiv: 'Inaktiv',
+};
+export const PAY_TYPES = { stunde: 'Stundenlohn', monat: 'Monatsgehalt', keine: 'Keine Vergütung hinterlegt' };
+
+export const ABSENCE_KINDS = {
+  urlaub: 'Urlaub', krank: 'Krankheit', kind_krank: 'Kind krank', sonderurlaub: 'Sonderurlaub',
+  unbezahlt: 'Unbezahlter Urlaub', schulung: 'Schulung / Weiterbildung', ueberstundenabbau: 'Überstundenabbau', sonstiges: 'Sonstiges',
+};
+export const ABSENCE_STATUS = { beantragt: 'Beantragt', genehmigt: 'Genehmigt', abgelehnt: 'Abgelehnt', storniert: 'Storniert' };
+
+export const SHIFT_STATUS = { geplant: 'Geplant', bestaetigt: 'Bestätigt', abgesagt: 'Abgesagt' };
 
 export const ORDER_STATUS = {
   geplant: 'Geplant',

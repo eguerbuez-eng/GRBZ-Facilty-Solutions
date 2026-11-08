@@ -12,13 +12,15 @@ import {
 } from '../shared/constants.js';
 import { todayYmd, addDays, weekday, daysBetween, seasonOf, ymdOf } from '../shared/dates.js';
 import { checklistProblems, autoReport } from '../shared/rules.js';
+import { fmtPersonnelNo, validateRuleParams, RULE_KINDS, SCOPE_TYPES } from '../shared/hr.js';
 
-const GENERIC = ['customers', 'contact_history', 'services', 'objects', 'materials', 'machines', 'winter_areas', 'winter_standby', 'checklist_templates'];
+export const GENERIC = ['customers', 'contact_history', 'services', 'objects', 'materials', 'machines', 'winter_areas', 'winter_standby', 'checklist_templates',
+  'employment_types', 'positions', 'departments', 'work_models', 'holidays', 'pay_rules', 'pay_adjustments', 'mileage_logs', 'overtime_adjustments', 'object_revenues'];
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HM = /^\d{2}:\d{2}$/;
 
-const bad = (msg) => new AppError(400, msg);
-const req = (v, msg) => { if (v === undefined || v === null || v === '') throw bad(msg); return v; };
+export const bad = (msg) => new AppError(400, msg);
+export const req = (v, msg) => { if (v === undefined || v === null || v === '') throw bad(msg); return v; };
 const isIso = (v) => typeof v === 'string' && !isNaN(Date.parse(v));
 const year = () => todayYmd().slice(0, 4);
 
@@ -33,7 +35,7 @@ function numberFor(db, table) {
     case 'defects': return `M-${y}-` + pad(db.nextNumber('defect_' + y), 4);
     case 'inspections': return `QK-${y}-` + pad(db.nextNumber('inspection_' + y), 4);
     case 'winter_operations': return `WD-${y}-` + pad(db.nextNumber('winter_' + y), 4);
-    case 'users': return 'MA-' + pad(db.nextNumber('employee'), 3);
+    case 'users': return fmtPersonnelNo(db.nextNumber('personnel')); // G-0001 …, nie wiederverwendet
     case 'qr_codes': return 'GRBZ-QR-' + pad(db.nextNumber('qr'), 6);
     default: return null;
   }
@@ -54,8 +56,15 @@ function cleanFields(def, data, isNew) {
         case 'number': case 'money': {
           const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
           if (!isFinite(n)) throw bad(`„${f.label}“ muss eine Zahl sein.`);
-          if (n < 0) throw bad(`„${f.label}“ darf nicht negativ sein.`);
+          if (n < 0 && !f.allowNegative) throw bad(`„${f.label}“ darf nicht negativ sein.`);
           v = n; break;
+        }
+        case 'month': if (!/^\d{4}-\d{2}$/.test(v)) throw bad(`„${f.label}“ muss ein Monat (JJJJ-MM) sein.`); break;
+        case 'json': v = JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v); break;
+        case 'dayhours': {
+          const arr = typeof v === 'string' ? JSON.parse(v) : v;
+          if (!Array.isArray(arr) || arr.length !== 7 || arr.some((m) => !(+m >= 0 && +m <= 1440))) throw bad(`„${f.label}“: bitte für jeden Wochentag 0–24 Stunden angeben.`);
+          v = JSON.stringify(arr.map((m) => Math.round(+m))); break;
         }
         case 'date': if (!YMD.test(v)) throw bad(`„${f.label}“ ist kein gültiges Datum.`); break;
         case 'datetime': if (!isIso(v)) throw bad(`„${f.label}“ ist kein gültiger Zeitpunkt.`); v = new Date(v).toISOString(); break;
@@ -77,13 +86,13 @@ function cleanFields(def, data, isNew) {
   return out;
 }
 
-function checkVersion(existing, baseVersion) {
+export function checkVersion(existing, baseVersion) {
   if (baseVersion != null && existing.version !== Number(baseVersion)) {
     throw new AppError(409, 'Der Datensatz wurde zwischenzeitlich auf einem anderen Gerät geändert.', { conflict: true, server: existing });
   }
 }
 
-function requireRef(db, table, id, label) {
+export function requireRef(db, table, id, label) {
   if (id == null) return;
   const r = db.get(`SELECT id FROM ${table} WHERE id = ? AND deleted = 0`, id);
   if (!r) throw bad(`${label} wurde nicht gefunden.`);
@@ -100,7 +109,7 @@ function touchObjectTree(db, objectId) {
   touch(db, 'qr_codes', 'object_id = ?', objectId);
   touch(db, 'winter_areas', 'object_id = ?', objectId);
 }
-function touchOrderTree(db, orderId) {
+export function touchOrderTree(db, orderId) {
   touch(db, 'order_checklist_items', 'order_id = ?', orderId);
   touch(db, 'photos', 'order_id = ?', orderId);
   const o = db.byId('orders', orderId);
@@ -355,6 +364,7 @@ export const commands = {
       } else clean[def.numberField] = numberFor(db, def.table);
     }
     if (entity === 'contact_history') clean.user_id = user.id;
+    if (['pay_adjustments', 'overtime_adjustments'].includes(entity)) clean.created_by = user.id;
     const row = db.insert(def.table, { id: id || uuid(), ...clean });
     if (entity === 'objects') createQr(db, ctx, { target_type: 'object', object_id: row.id });
     if (entity === 'materials' && row.stock) {
@@ -996,6 +1006,21 @@ function validateRefs(db, entity, clean) {
   if (clean.user_id && entity !== 'contact_history') requireRef(db, 'users', clean.user_id, 'Der Mitarbeiter');
   if (clean.responsible_user_id) requireRef(db, 'users', clean.responsible_user_id, 'Der Mitarbeiter');
   if (entity === 'winter_standby' && clean.start_at && clean.end_at && clean.end_at <= clean.start_at) throw bad('Das Ende muss nach dem Beginn liegen.');
+  if (entity === 'pay_rules') {
+    if ('kind' in clean && !RULE_KINDS[clean.kind]) throw bad('Unbekannte Berechnungsart.');
+    if ('scope_type' in clean && !SCOPE_TYPES[clean.scope_type]) throw bad('Ungültiger Geltungsbereich.');
+    if (clean.scope_type && clean.scope_type !== 'alle') {
+      const t = { abteilung: 'departments', beschaeftigungsart: 'employment_types', position: 'positions', mitarbeiter: 'users', objekt: 'objects' }[clean.scope_type];
+      requireRef(db, t, req(clean.scope_id, 'Bitte die Auswahl für den Geltungsbereich treffen.'), 'Die Auswahl');
+    }
+    if (clean.scope_type === 'alle') clean.scope_id = null;
+    if (clean.kind === 'objektverguetung' && clean.scope_type && clean.scope_type !== 'objekt') throw bad('Objektbezogene Vergütung bitte mit Geltungsbereich „Objekt“ anlegen.');
+    if (clean.kind && clean.scope_type === 'objekt' && clean.kind !== 'objektverguetung') throw bad('Der Geltungsbereich „Objekt“ ist nur für die objektbezogene Vergütung vorgesehen.');
+    if ('params' in clean) { const err = validateRuleParams(clean.kind, JSON.parse(clean.params || '{}')); if (err) throw bad(err); }
+    if (clean.valid_from && clean.valid_to && clean.valid_to < clean.valid_from) throw bad('„Gültig bis“ liegt vor „Gültig ab“.');
+  }
+  if (clean.amount !== undefined && clean.amount !== null && entity === 'pay_adjustments' && clean.amount <= 0) throw bad('Bitte einen positiven Betrag angeben (die Art bestimmt Zuschlag oder Abzug).');
+  if (entity === 'overtime_adjustments' && clean.minutes === 0) throw bad('Bitte eine Minutenanzahl ungleich 0 angeben.');
 }
 
 function syncJunction(db, table, ownerCol, ownerId, refCol, ids) {

@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT,
   street TEXT, zip TEXT, city TEXT,
   entry_date TEXT,
-  role TEXT NOT NULL CHECK (role IN ('admin','geschaeftsfuehrer','objektleiter','mitarbeiter','kunde')),
+  role TEXT NOT NULL,
+  legacy_employee_no TEXT,
   customer_id TEXT,
   password_hash TEXT NOT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 0,
@@ -468,3 +469,139 @@ CREATE INDEX IF NOT EXISTS idx_stock_material ON stock_movements(material_id);
 CREATE INDEX IF NOT EXISTS idx_defects_status ON defects(status);
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
 CREATE INDEX IF NOT EXISTS idx_scans_at ON scans(scanned_at);
+
+-- =====================================================================
+-- Personalverwaltung (Schema-Version 2)
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  role_key TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  permissions TEXT NOT NULL DEFAULT '[]',
+  scoped INTEGER NOT NULL DEFAULT 0,
+  system INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  sort INTEGER NOT NULL DEFAULT 100,
+  description TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS employment_types (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 100,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS positions (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 100,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS departments (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 100,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS work_models (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
+  day_minutes TEXT NOT NULL DEFAULT '[0,0,0,0,0,0,0]',
+  holidays_reduce INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+-- Personalakte (1:1 zu users, id = user_id). Vergütungsdaten nur mit Recht hr.salary sichtbar.
+CREATE TABLE IF NOT EXISTS employee_profiles (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+  birth_date TEXT, mobile TEXT, emergency_contact TEXT,
+  exit_date TEXT,
+  status TEXT NOT NULL DEFAULT 'aktiv',
+  employment_type_id TEXT, position_id TEXT, department_id TEXT, supervisor_id TEXT,
+  work_model_id TEXT, weekly_hours REAL,
+  pay_type TEXT NOT NULL DEFAULT 'keine', hourly_rate REAL, monthly_salary REAL,
+  vacation_days REAL, vacation_carryover REAL,
+  contract_note TEXT, hr_notes TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS holidays (
+  id TEXT PRIMARY KEY, date TEXT NOT NULL, name TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS absences (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,
+  start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+  half_day INTEGER NOT NULL DEFAULT 0,
+  days REAL NOT NULL DEFAULT 0,
+  paid INTEGER NOT NULL DEFAULT 1,
+  certificate INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'beantragt',
+  note TEXT,
+  requested_by TEXT, decided_by TEXT, decided_at TEXT, decision_note TEXT,
+  substitute_user_id TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS shifts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  object_id TEXT,
+  date TEXT NOT NULL,
+  start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+  break_minutes INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'geplant',
+  replaces_user_id TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pay_rules (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  category TEXT,
+  scope_type TEXT NOT NULL DEFAULT 'alle',
+  scope_id TEXT,
+  params TEXT NOT NULL DEFAULT '{}',
+  priority INTEGER NOT NULL DEFAULT 0,
+  valid_from TEXT, valid_to TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  description TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS pay_adjustments (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, month TEXT NOT NULL,
+  kind TEXT NOT NULL, amount REAL NOT NULL, object_id TEXT, note TEXT, created_by TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS mileage_logs (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, date TEXT NOT NULL, km REAL NOT NULL, object_id TEXT, note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS overtime_adjustments (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, date TEXT NOT NULL, minutes INTEGER NOT NULL, reason TEXT NOT NULL, created_by TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS object_revenues (
+  id TEXT PRIMARY KEY, object_id TEXT NOT NULL, month TEXT NOT NULL, amount REAL NOT NULL, note TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1, seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_absences_user ON absences(user_id, start_date);
+CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(date);
+CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(date);

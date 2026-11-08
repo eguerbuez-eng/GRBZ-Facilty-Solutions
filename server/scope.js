@@ -12,7 +12,7 @@ const USER_FULL = ['id', 'employee_no', 'name', 'email', 'phone', 'street', 'zip
   'active', 'last_login_at', 'notes', 'created_at', 'updated_at', 'version', 'seq', 'deleted'];
 const CUSTOMER_PUBLIC = ['id', 'customer_no', 'company_name', 'created_at', 'updated_at', 'version', 'seq', 'deleted'];
 
-export const isScoped = (user) => SCOPED_ROLES.includes(user.role);
+export const isScoped = (user) => (user.scoped !== undefined ? !!user.scoped : SCOPED_ROLES.includes(user.role));
 
 /**
  * Liefert {cols, where} für eine Tabelle oder null, wenn kein Zugriff besteht.
@@ -35,8 +35,8 @@ export function tableScope(user, table) {
       return all;
     case 'objects':
       if (!can(user, 'objects.read')) return null;
-      if (scoped) return { cols: '*', where: `id IN ${MY_OBJECTS}`, hide: can(user, 'customers.read') ? [] : ['contract_info'] };
-      return { ...all, hide: can(user, 'customers.read') ? [] : ['contract_info'] };
+      if (scoped) return { cols: '*', where: `id IN ${MY_OBJECTS}`, hide: ['contract_info', 'monthly_revenue'] };
+      return { ...all, hide: [...(can(user, 'customers.read') ? [] : ['contract_info']), ...(can(user, 'hr.salary') ? [] : ['monthly_revenue'])] };
     case 'object_employees':
       if (!can(user, 'objects.read')) return null;
       return scoped ? { cols: '*', where: 'user_id = $uid' } : all;
@@ -87,7 +87,38 @@ export function tableScope(user, table) {
       if (can(user, 'winter.write')) return all;
       return can(user, 'winter.read') ? { cols: '*', where: 'user_id = $uid' } : null;
     case 'documents':
-      return can(user, 'documents.read') ? all : null;
+      // Personaldokumente (user_id gesetzt) nur mit Recht hr.read
+      if (can(user, 'documents.read') && can(user, 'hr.read')) return all;
+      if (can(user, 'documents.read')) return { cols: '*', where: 'user_id IS NULL' };
+      if (can(user, 'hr.read')) return { cols: '*', where: 'user_id IS NOT NULL' };
+      return null;
+    // ---------- Personalverwaltung ----------
+    case 'roles':
+    case 'employment_types':
+    case 'positions':
+    case 'departments':
+    case 'work_models':
+    case 'holidays':
+      return all;
+    case 'employee_profiles': {
+      const pay = ['pay_type', 'hourly_rate', 'monthly_salary'];
+      if (can(user, 'hr.read')) return { cols: '*', where: '1=1', hide: can(user, 'hr.salary') ? [] : pay };
+      return { cols: '*', where: 'user_id = $uid', hide: pay };
+    }
+    case 'absences':
+      if (can(user, 'absences.manage') || can(user, 'hr.read') || can(user, 'planning.manage')) return all;
+      return { cols: '*', where: 'user_id = $uid' };
+    case 'shifts':
+      if (can(user, 'planning.manage') || can(user, 'hr.read')) return all;
+      return can(user, 'shifts.own') ? { cols: '*', where: '(user_id = $uid OR replaces_user_id = $uid)' } : null;
+    case 'pay_rules':
+      return can(user, 'hr.rules') || can(user, 'hr.salary') ? all : null;
+    case 'pay_adjustments':
+    case 'object_revenues':
+      return can(user, 'hr.salary') ? all : null;
+    case 'mileage_logs':
+    case 'overtime_adjustments':
+      return can(user, 'hr.read') ? all : { cols: '*', where: 'user_id = $uid' };
     case 'scans':
       return can(user, 'qr.manage') ? { cols: '*', where: "scanned_at > datetime('now','-90 days')" } : { cols: '*', where: 'user_id = $uid' };
     default:

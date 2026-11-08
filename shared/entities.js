@@ -3,6 +3,7 @@
 // (Aufträge, Zeiterfassung, Bestand, Mängel …) liegt in eigenen Befehlen.
 
 import { DEFECT_KINDS, DEFECT_STATUS, WINTER_WEATHER, WINTER_ACTIVITIES } from './constants.js';
+import { RULE_KINDS, SCOPE_TYPES } from './hr.js';
 
 const opt = (o) => Object.entries(o).map(([value, label]) => ({ value, label }));
 
@@ -169,6 +170,125 @@ export const ENTITIES = {
       { name: 'activity', label: 'Tätigkeit', type: 'select', options: opt(WINTER_ACTIVITIES) },
     ],
   },
+  employment_types: {
+    label: 'Beschäftigungsart', plural: 'Beschäftigungsarten', table: 'employment_types',
+    read: 'hr.read', write: 'hr.manage',
+    title: (r) => r.name,
+    fields: [
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true, list: true },
+      { name: 'description', label: 'Beschreibung', type: 'textarea', rows: 2 },
+      { name: 'sort', label: 'Sortierung', type: 'number', default: 100, half: true },
+      { name: 'active', label: 'Aktiv', type: 'bool', default: 1, half: true },
+    ],
+  },
+  positions: {
+    label: 'Position', plural: 'Positionen', table: 'positions',
+    read: 'hr.read', write: 'hr.manage',
+    title: (r) => r.name,
+    fields: [
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true, list: true },
+      { name: 'description', label: 'Beschreibung', type: 'textarea', rows: 2 },
+      { name: 'sort', label: 'Sortierung', type: 'number', default: 100, half: true },
+      { name: 'active', label: 'Aktiv', type: 'bool', default: 1, half: true },
+    ],
+  },
+  departments: {
+    label: 'Abteilung', plural: 'Abteilungen', table: 'departments',
+    read: 'hr.read', write: 'hr.manage',
+    title: (r) => r.name,
+    fields: [
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true, list: true },
+      { name: 'description', label: 'Beschreibung', type: 'textarea', rows: 2 },
+      { name: 'sort', label: 'Sortierung', type: 'number', default: 100, half: true },
+      { name: 'active', label: 'Aktiv', type: 'bool', default: 1, half: true },
+    ],
+  },
+  work_models: {
+    label: 'Arbeitszeitmodell', plural: 'Arbeitszeitmodelle', table: 'work_models',
+    read: 'hr.read', write: 'hr.manage',
+    title: (r) => r.name,
+    fields: [
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true },
+      { name: 'description', label: 'Beschreibung', type: 'textarea', rows: 2 },
+      { name: 'day_minutes', label: 'Soll-Stunden je Wochentag', type: 'dayhours', required: true },
+      { name: 'holidays_reduce', label: 'Hinterlegte Feiertage verringern die Soll-Zeit', type: 'bool', default: 1 },
+      { name: 'active', label: 'Aktiv', type: 'bool', default: 1 },
+    ],
+  },
+  holidays: {
+    label: 'Feiertag', plural: 'Feiertage', table: 'holidays',
+    read: 'dashboard.view', write: 'hr.manage', deletable: true,
+    title: (r) => r.name,
+    fields: [
+      { name: 'date', label: 'Datum', type: 'date', required: true },
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true },
+    ],
+  },
+  pay_rules: {
+    label: 'Berechnungsmodell', plural: 'Berechnungsmodelle', table: 'pay_rules',
+    read: 'hr.rules', write: 'hr.rules', deletable: true,
+    title: (r) => r.name,
+    fields: [
+      { name: 'name', label: 'Bezeichnung', type: 'text', required: true },
+      { name: 'kind', label: 'Berechnungsart', type: 'select', required: true, options: Object.entries(RULE_KINDS).map(([value, k]) => ({ value, label: k.label })) },
+      { name: 'category', label: 'Kategorie', type: 'text' },
+      { name: 'scope_type', label: 'Gilt für', type: 'select', required: true, default: 'alle', options: Object.entries(SCOPE_TYPES).map(([value, label]) => ({ value, label })) },
+      { name: 'scope_id', label: 'Auswahl', type: 'text' },
+      { name: 'params', label: 'Parameter', type: 'json' },
+      { name: 'priority', label: 'Priorität', type: 'number', default: 0 },
+      { name: 'valid_from', label: 'Gültig ab (Monat)', type: 'month' },
+      { name: 'valid_to', label: 'Gültig bis (Monat)', type: 'month' },
+      { name: 'active', label: 'Aktiv', type: 'bool', default: 1 },
+      { name: 'description', label: 'Notiz', type: 'textarea', rows: 2 },
+    ],
+  },
+  pay_adjustments: {
+    label: 'Einmalbetrag', plural: 'Einmalige Zuschläge, Prämien und Abzüge', table: 'pay_adjustments',
+    read: 'hr.salary', write: 'hr.salary', deletable: true,
+    title: (r) => r.note || r.kind,
+    fields: [
+      { name: 'user_id', label: 'Mitarbeiter', type: 'ref', ref: 'users', required: true },
+      { name: 'month', label: 'Monat', type: 'month', required: true },
+      { name: 'kind', label: 'Art', type: 'select', required: true, options: [{ value: 'praemie', label: 'Prämie / Bonus' }, { value: 'zuschlag', label: 'Individueller Zuschlag' }, { value: 'abzug', label: 'Individueller Abzug' }] },
+      { name: 'amount', label: 'Betrag (€)', type: 'money', required: true },
+      { name: 'object_id', label: 'Objekt (optional, für Kostenzuordnung)', type: 'ref', ref: 'objects' },
+      { name: 'note', label: 'Bemerkung', type: 'text', required: true },
+    ],
+  },
+  mileage_logs: {
+    label: 'Fahrt', plural: 'Fahrten', table: 'mileage_logs',
+    read: 'hr.read', write: 'hr.manage', deletable: true,
+    title: (r) => r.note || 'Fahrt',
+    fields: [
+      { name: 'user_id', label: 'Mitarbeiter', type: 'ref', ref: 'users', required: true },
+      { name: 'date', label: 'Datum', type: 'date', required: true, default: 'today', half: true },
+      { name: 'km', label: 'Kilometer', type: 'number', required: true, half: true },
+      { name: 'object_id', label: 'Objekt', type: 'ref', ref: 'objects' },
+      { name: 'note', label: 'Bemerkung / Strecke', type: 'text' },
+    ],
+  },
+  overtime_adjustments: {
+    label: 'Zeitkonto-Buchung', plural: 'Zeitkonto-Buchungen', table: 'overtime_adjustments',
+    read: 'hr.read', write: 'hr.manage', deletable: true,
+    title: (r) => r.reason,
+    fields: [
+      { name: 'user_id', label: 'Mitarbeiter', type: 'ref', ref: 'users', required: true },
+      { name: 'date', label: 'Datum', type: 'date', required: true, default: 'today', half: true },
+      { name: 'minutes', label: 'Minuten (+ Gutschrift / − Abzug, Auszahlung)', type: 'number', required: true, allowNegative: true, half: true },
+      { name: 'reason', label: 'Grund', type: 'text', required: true },
+    ],
+  },
+  object_revenues: {
+    label: 'Objektumsatz', plural: 'Objektumsätze', table: 'object_revenues',
+    read: 'hr.salary', write: 'hr.salary', deletable: true,
+    title: (r) => r.month,
+    fields: [
+      { name: 'object_id', label: 'Objekt', type: 'ref', ref: 'objects', required: true },
+      { name: 'month', label: 'Monat', type: 'month', required: true },
+      { name: 'amount', label: 'Umsatz netto (€)', type: 'money', required: true },
+      { name: 'note', label: 'Bemerkung', type: 'text' },
+    ],
+  },
 };
 
 // Tabellen, die per Delta-Sync auf die Geräte repliziert werden.
@@ -178,4 +298,6 @@ export const SYNC_TABLES = [
   'photos', 'time_entries', 'time_corrections', 'materials', 'stock_movements', 'machines', 'machine_events',
   'inspections', 'inspection_items', 'defects', 'defect_log', 'winter_areas', 'winter_standby', 'winter_operations',
   'documents', 'scans',
+  'roles', 'employment_types', 'positions', 'departments', 'work_models', 'employee_profiles', 'holidays',
+  'absences', 'shifts', 'pay_rules', 'pay_adjustments', 'mileage_logs', 'overtime_adjustments', 'object_revenues',
 ];

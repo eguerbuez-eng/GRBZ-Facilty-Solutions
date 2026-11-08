@@ -1,7 +1,7 @@
 // Authentifizierung: scrypt-Passworthashes, serverseitige Sitzungen (HttpOnly-Cookie).
 import crypto from 'node:crypto';
 import { nowIso, AppError } from './db.js';
-import { can, ROLE_PERMISSIONS } from '../shared/constants.js';
+import { can, ROLE_PERMISSIONS, SCOPED_ROLES } from '../shared/constants.js';
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 export const SESSION_COOKIE = 'grbz_session';
@@ -35,12 +35,31 @@ export function validatePasswordStrength(pw) {
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
+/** Rechte der Rolle aus der Datenbank an den Benutzer hängen (Rollen sind über die Oberfläche änderbar). */
+export function attachRole(db, u) {
+  if (!u) return u;
+  const r = db.get('SELECT * FROM roles WHERE role_key = ? AND deleted = 0', u.role);
+  if (u.role === 'admin') { u.permissions = ROLE_PERMISSIONS.admin; u.scoped = false; u.role_name = r?.name || 'Administrator'; return u; }
+  if (r) {
+    let perms = [];
+    try { perms = JSON.parse(r.permissions || '[]'); } catch { /* leer */ }
+    u.permissions = r.active ? perms.filter((p) => ROLE_PERMISSIONS.admin.includes(p)) : [];
+    u.scoped = !!r.scoped;
+    u.role_name = r.name;
+  } else {
+    u.permissions = ROLE_PERMISSIONS[u.role] || [];
+    u.scoped = SCOPED_ROLES.includes(u.role);
+    u.role_name = u.role;
+  }
+  return u;
+}
+
 export function publicUser(u) {
   if (!u) return null;
   return {
-    id: u.id, name: u.name, email: u.email, role: u.role, employee_no: u.employee_no,
+    id: u.id, name: u.name, email: u.email, role: u.role, role_name: u.role_name, employee_no: u.employee_no,
     customer_id: u.customer_id, must_change_password: !!u.must_change_password,
-    permissions: ROLE_PERMISSIONS[u.role] || [],
+    permissions: u.permissions || ROLE_PERMISSIONS[u.role] || [], scoped: !!u.scoped,
   };
 }
 
@@ -90,7 +109,7 @@ export function login(db, email, password, ip) {
   }
   db.run('UPDATE users SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', nowIso(), user.id);
   db.audit(user.id, 'login', 'users', user.id, null, ip);
-  return user;
+  return attachRole(db, user);
 }
 
 export function authMiddleware(db) {
@@ -101,7 +120,7 @@ export function authMiddleware(db) {
       if (s && s.expires_at > nowIso()) {
         const u = db.get('SELECT * FROM users WHERE id = ? AND active = 1 AND deleted = 0', s.user_id);
         if (u) {
-          req.user = u;
+          req.user = attachRole(db, u);
           req.sessionToken = token;
           // Gleitende Verlängerung höchstens einmal pro Stunde schreiben
           if (Date.parse(s.last_seen_at) < Date.now() - 36e5) {
