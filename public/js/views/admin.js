@@ -11,7 +11,7 @@ export function menuView() {
   const tiles = h('div', { class: 'tiles' });
   for (const item of NAV) if (!item.group && allowed(item)) tiles.append(h('a', { class: 'tile', href: item.href }, ic(item.icon), h('div', null, item.label)));
   const u = user();
-  return h('div', null, pageHead('Menü', { sub: `${u.name} · ${ROLES[u.role]}` }), tiles);
+  return h('div', null, pageHead('Menü', { sub: `${u.name} · ${u.role_name || ROLES[u.role] || u.role}` }), tiles);
 }
 
 // ---------- Synchronisation ----------
@@ -65,8 +65,8 @@ export function accountView() {
   setTimeout(() => { const chk = setInterval(() => { if (!scanOut.isConnected) { off(); clearInterval(chk); } }, 2000); }, 100);
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   return h('div', null,
-    pageHead('Mein Konto', { sub: `${u.name} · ${ROLES[u.role]}` }),
-    card('Benutzer', kv([['Name', u.name], ['E-Mail', u.email], ['Mitarbeiter-ID', u.employee_no], ['Rolle', ROLES[u.role]]]), { iconName: 'user' }),
+    pageHead('Mein Konto', { sub: `${u.name} · ${u.role_name || ROLES[u.role] || u.role}` }),
+    card('Benutzer', kv([['Name', u.name], ['E-Mail', u.email], ['Personalnummer', u.employee_no], ['Rolle', u.role_name || ROLES[u.role]]]), { iconName: 'user' }),
     card('Sicherheit', h('div', { class: 'card-pad btn-row' },
       btn('Passwort ändern', { icon: 'key', onclick: () => showPasswordChange(false) }),
       btn('Abmelden', { icon: 'logout', cls: 'danger', onclick: async () => {

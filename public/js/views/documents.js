@@ -5,6 +5,7 @@ import { may, refOptions, userLabel } from './common.js';
 import { fmtDate } from '/shared/dates.js';
 
 export const DOC_KINDS = {
+  arbeitsvertrag: 'Arbeitsvertrag', personaldokument: 'Personaldokument', au_bescheinigung: 'AU-Bescheinigung',
   vertrag: 'Vertrag', angebot: 'Angebot', auftragsbestaetigung: 'Auftragsbestätigung', checkliste: 'Checkliste', leistungsnachweis: 'Leistungsnachweis',
   rechnung: 'Rechnung', wartungsprotokoll: 'Wartungsprotokoll', schadensbericht: 'Schadensbericht', korrespondenz: 'Kundenkorrespondenz',
   monatsbericht: 'Monatsbericht', kontrollbericht: 'Kontrollbericht', qualitaetsbericht: 'Qualitätsbericht', fotodokumentation: 'Fotodokumentation',
@@ -18,12 +19,12 @@ export async function uploadDialog(link = {}) {
   const file = h('input', { type: 'file', accept: '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.txt,.csv' });
   const f = buildForm([
     { name: 'title', label: 'Titel', type: 'text', required: true },
-    { name: 'kind', label: 'Dokumentart', type: 'select', required: true, options: kindOpts, default: 'vertrag' },
-    { name: 'customer_id', label: 'Kunde', type: 'ref', refOptions: refOptions('customers'), readonly: !!link.customer_id },
-    { name: 'object_id', label: 'Objekt', type: 'ref', refOptions: refOptions('objects'), readonly: !!link.object_id },
+    { name: 'kind', label: 'Dokumentart', type: 'select', required: true, options: kindOpts },
+    link.user_id ? null : { name: 'customer_id', label: 'Kunde', type: 'ref', refOptions: refOptions('customers'), readonly: !!link.customer_id },
+    link.user_id ? null : { name: 'object_id', label: 'Objekt', type: 'ref', refOptions: refOptions('objects'), readonly: !!link.object_id },
     { name: 'notes', label: 'Notiz', type: 'textarea', rows: 2 },
-    { name: 'customer_visible', label: 'Im Kundenportal sichtbar', type: 'bool' },
-  ], link);
+    link.user_id ? null : { name: 'customer_visible', label: 'Im Kundenportal sichtbar', type: 'bool' },
+  ].filter(Boolean), { ...link, kind: link.user_id ? 'arbeitsvertrag' : 'vertrag' });
   file.addEventListener('change', () => { if (file.files[0] && !f.inputs.title.value) f.inputs.title.value = file.files[0].name.replace(/\.[^.]+$/, ''); });
   await modal({
     title: 'Dokument hochladen', body: h('div', null, h('div', { class: 'field', style: { marginBottom: '14px' } }, h('label', null, 'Datei (max. 25 MB)'), file), f.el),
@@ -74,10 +75,11 @@ async function editDoc(d) {
 }
 
 export function documentsCard(link) {
-  const docs = store.all('documents', (d) => (!link.object_id || d.object_id === link.object_id) && (link.object_id || !link.customer_id || d.customer_id === link.customer_id) && (!link.machine_id || d.machine_id === link.machine_id))
+  const docs = store.all('documents', (d) => (link.user_id ? d.user_id === link.user_id : !d.user_id) && (!link.object_id || d.object_id === link.object_id) && (link.object_id || !link.customer_id || d.customer_id === link.customer_id) && (!link.machine_id || d.machine_id === link.machine_id))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  return card('Dokumente', docs.length ? h('div', { class: 'list' }, docs.map(docRow)) : empty('Keine Dokumente.', 'file'),
-    { iconName: 'file', actions: may('documents.write') ? [btn('Hochladen', { cls: 'sm', icon: 'upload', onclick: () => uploadDialog(link) })] : null });
+  const canUpload = link.user_id ? may('hr.manage') : may('documents.write');
+  return card(link.user_id ? 'Personaldokumente (Arbeitsvertrag, Nachweise …)' : 'Dokumente', docs.length ? h('div', { class: 'list' }, docs.map(docRow)) : empty('Keine Dokumente.', 'file'),
+    { iconName: 'file', actions: canUpload ? [btn('Hochladen', { cls: 'sm', icon: 'upload', onclick: () => uploadDialog(link) })] : null });
 }
 
 const st = { q: '', kind: '' };

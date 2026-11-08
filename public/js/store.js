@@ -369,7 +369,7 @@ export async function cacheGet(key) { return metaGet('cache:' + key); }
 function execOrder(tx, id) {
   const o = tx.get('orders', id);
   if (!o) throw fail('Auftrag nicht gefunden.');
-  if (!can(user, 'orders.write') && user.role === 'mitarbeiter' && o.assigned_user_id !== user.id) throw fail('Dieser Auftrag ist Ihnen nicht zugeordnet.');
+  if (!can(user, 'orders.write') && user.scoped && o.assigned_user_id !== user.id) throw fail('Dieser Auftrag ist Ihnen nicht zugeordnet.');
   return o;
 }
 const openEntry = (tx, kind) => tx.all('time_entries', (e) => e.user_id === user.id && e.kind === kind && !e.end_at && !e.voided)
@@ -516,6 +516,23 @@ const LOCAL = {
     tx.put('inspections', { id: p.id, inspection_no: null, object_id: p.object_id, order_id: p.order_id || null, inspector_id: user.id, inspected_at: now(), score, notes: p.notes || null, customer_visible: p.customer_visible ? 1 : 0, deleted: 0, _pending: true });
     items.forEach((i, idx) => { i.id = i.id || uuid(); tx.put('inspection_items', { id: i.id, inspection_id: p.id, position: idx, text: i.text, rating: rated.includes(i) ? +i.rating : null, comment: i.comment || null, deleted: 0 }); });
   },
+  'employee.saveProfile'(p, tx) {
+    const ex = tx.get('employee_profiles', p.user_id);
+    tx.put('employee_profiles', { ...(ex || { id: p.user_id, user_id: p.user_id, status: 'aktiv', pay_type: 'keine', deleted: 0 }), ...p.data, _pending: true });
+  },
+  'absence.save'(p, tx) {
+    if (!p.start_date || !p.end_date || p.end_date < p.start_date) throw fail('Bitte einen gültigen Zeitraum angeben.');
+    const ex = tx.get('absences', p.id);
+    const manager = can(user, 'absences.manage');
+    tx.put('absences', { ...(ex || { status: manager ? 'genehmigt' : 'beantragt', requested_by: user.id, deleted: 0, days: 0 }), id: p.id, user_id: p.user_id || user.id, kind: p.kind, start_date: p.start_date, end_date: p.end_date, half_day: p.half_day ? 1 : 0, note: p.note || null, _pending: true });
+  },
+  'absence.decide'(p, tx) { const a = tx.get('absences', p.id); if (a) tx.put('absences', { ...a, status: p.approve ? 'genehmigt' : 'abgelehnt' }); },
+  'absence.cancel'(p, tx) { const a = tx.get('absences', p.id); if (a) tx.put('absences', { ...a, status: 'storniert' }); },
+  'shift.save'(p, tx) {
+    const ex = tx.get('shifts', p.id);
+    tx.put('shifts', { ...(ex || { status: 'geplant', deleted: 0 }), id: p.id, user_id: p.user_id, object_id: p.object_id || null, date: p.date, start_time: p.start_time, end_time: p.end_time, break_minutes: +p.break_minutes || 0, note: p.note || null, _pending: true });
+  },
+  'shift.delete'(p, tx) { tx.del('shifts', p.id); },
   'photo.update'(p, tx) { const ph = tx.get('photos', p.id); if (ph) tx.put('photos', { ...ph, ...Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'id')) }); },
   'photo.delete'(p, tx) { tx.del('photos', p.id); },
 };

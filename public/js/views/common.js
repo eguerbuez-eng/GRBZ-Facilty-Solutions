@@ -20,6 +20,9 @@ export function refOptions(ref, filter) {
     case 'templates': return store.all('checklist_templates', (t) => t.active && (!filter || filter(t))).sort((a, b) => a.name.localeCompare(b.name)).map((t) => ({ value: t.id, label: t.name }));
     case 'machines': return store.all('machines', (m) => !m.archived).sort((a, b) => a.name.localeCompare(b.name)).map((m) => ({ value: m.id, label: `${m.name}${m.inventory_no ? ' · ' + m.inventory_no : ''}` }));
     case 'materials': return store.all('materials', (m) => !m.archived).sort((a, b) => a.name.localeCompare(b.name)).map((m) => ({ value: m.id, label: `${m.name}${m.article_no ? ' · ' + m.article_no : ''}` }));
+    case 'employment_types': case 'positions': case 'departments': case 'work_models':
+      return store.all(ref, (x) => x.active && (!filter || filter(x))).sort((a, b) => (a.sort ?? 100) - (b.sort ?? 100) || a.name.localeCompare(b.name)).map((x) => ({ value: x.id, label: x.name }));
+    case 'roles': return store.all('roles', (r) => r.active && (!filter || filter(r))).sort((a, b) => a.sort - b.sort).map((r) => ({ value: r.role_key, label: r.name }));
     default: return [];
   }
 }
@@ -102,6 +105,11 @@ const ACTIONS = {
   'materials.erstellt': 'Artikel angelegt', 'machines.erstellt': 'Maschine angelegt', 'maschine.wartung': 'Wartung dokumentiert', 'maschine.defekt': 'Defekt gemeldet', 'maschine.reparatur': 'Reparatur dokumentiert',
   'benutzer.erstellt': 'Benutzer angelegt', 'benutzer.geaendert': 'Benutzer geändert', 'benutzer.passwort_zurueckgesetzt': 'Passwort zurückgesetzt',
   'serie.erstellt': 'Serienauftrag angelegt', 'serie.geaendert': 'Serienauftrag geändert', 'checkliste.gespeichert': 'Checkliste gespeichert',
+  'personal.akte_geaendert': 'Personalakte geändert', 'benutzer.geloescht': 'Mitarbeiter gelöscht', 'abwesenheit.beantragt': 'Abwesenheit beantragt',
+  'abwesenheit.erfasst': 'Abwesenheit erfasst', 'abwesenheit.genehmigt': 'Abwesenheit genehmigt', 'abwesenheit.abgelehnt': 'Abwesenheit abgelehnt', 'abwesenheit.storniert': 'Abwesenheit storniert',
+  'abwesenheit.geaendert': 'Abwesenheit geändert', 'dienstplan.kopiert': 'Dienstplan-Woche kopiert', 'vertretung.zugewiesen': 'Vertretung zugewiesen',
+  'rolle.erstellt': 'Rolle angelegt', 'rolle.geaendert': 'Rolle/Rechte geändert', 'rolle.geloescht': 'Rolle gelöscht', 'pay_rules.erstellt': 'Berechnungsmodell angelegt',
+  'pay_rules.geaendert': 'Berechnungsmodell geändert', 'pay_adjustments.erstellt': 'Einmalbetrag erfasst', 'export.personalkosten': 'Personalkosten exportiert', 'bericht.personalkosten': 'Personalkostenbericht erstellt',
   'einstellungen.geaendert': 'Einstellungen geändert', 'einstellungen.logo': 'Logo geändert', 'passwort.geaendert': 'Passwort geändert',
   'ersteinrichtung.admin': 'Ersteinrichtung: Administrator angelegt', 'login.gesperrt': 'Konto nach Fehlversuchen gesperrt', 'export.zeit': 'Arbeitszeit exportiert',
   'backup.heruntergeladen': 'Datensicherung heruntergeladen', 'aufbewahrung.bereinigt': 'Alte Fotos bereinigt', 'dokument.geaendert': 'Dokument geändert',
@@ -124,7 +132,7 @@ export function userLabel(id) {
   const u = store.get('users', id);
   return u ? u.name : '–';
 }
-export const roleLabel = (r) => ROLES[r] || r;
+export const roleLabel = (r) => store.all('roles', (x) => x.role_key === r)[0]?.name || ROLES[r] || r;
 
 export function phoneLink(v) { return v ? h('a', { href: 'tel:' + v.replace(/[^\d+]/g, '') }, v) : null; }
 export function mailLink(v) { return v ? h('a', { href: 'mailto:' + v }, v) : null; }

@@ -1,5 +1,28 @@
 # Testprotokoll
 
+## Version 1.1 – Personalverwaltung (08.11.2026)
+
+`npm test`: **51 von 51** bestanden (40 bisherige unverändert + 11 neue in `tests/personnel.test.js`).
+`npm run test:e2e`: **11/11** (bestehender Offline-Ablauf, unverändert) + **10/10** (`tests-e2e/personal.mjs`).
+
+| Geprüft | Ergebnis |
+|---|---|
+| Personalnummern G-0001 ff., kein Doppel, keine Wiedervergabe nach Löschen, Kunden ohne Nummer | ✓ |
+| Migration einer Datenbank der Version 1.0: Sicherung, Übernahme aller Daten, Umnummerierung mit alter Nummer, Fremdschlüssel, kein zweiter Lauf | ✓ |
+| Eigene Beschäftigungsarten/Positionen anlegen und umbenennen, Arbeitszeitmodell-Validierung | ✓ |
+| Personalakte; Lohnfelder nur mit Lohnrecht änderbar und sichtbar | ✓ |
+| Eigene Rolle wirkt sofort; Administratorrolle geschützt; keine Rechteausweitung; Minijobber auf zugeordnete Objekte beschränkt | ✓ |
+| Urlaubsantrag → Genehmigung, Arbeitstage nach Modell, Überschneidung abgelehnt, Resturlaub | ✓ |
+| Schichten: Überschneidung, über Mitternacht, Abwesenheitswarnung, Woche kopieren, Vertretung, Mitarbeiter sieht nur eigene | ✓ |
+| Kostenrechnung gegen Handrechnung: 12,5 Std. × 15 € = 187,50; Überstunden 25 % = 46,88; Nacht 25 % (2 Std.) = 7,50; Sonntag 50 % (4 Std.) = 30,00; Objektzulage 2 €/Std. (8,5 Std.) = 17,00; Fahrt 2 × 5 € = 10,00; Brutto 298,88; +20 % = 358,65; 28,69 €/Std.; mitarbeiterspezifische Regel ersetzt allgemeine | ✓ |
+| Pausenregel (Abzug fehlender Pause), Rundung, Krankheitsgutschrift, Monatsgehalt, Zeitkonto mit Buchung | ✓ |
+| Personalkosten je Objekt = Gesamtkosten, Umsatzverhältnis, Rechte (Mitarbeiter sieht eigene Stunden, keine Beträge), CSV und PDF mit Hinweis „keine Lohnabrechnung“ | ✓ |
+| Oberfläche (Browser): Mitarbeiter anlegen inkl. Beschäftigung und Lohn, alle Reiter der Akte, Berechnungsmodell per Dialog, Schicht im Dienstplan, Urlaub → Vertretung zuweisen, Personalkosten, Kategorien/Feiertag/Arbeitszeitmodell, eigene Rolle, Minijobber-Login mit Urlaubsantrag und gesperrten Personalkosten | ✓ |
+
+Nicht getestet: echtes Gerät (EDA52/iPhone), Safari, große Datenmengen, Zeitumstellungstage.
+
+---
+
 Stand: 07.11.2026 · Umgebung: Linux, Node.js 22.23, Chromium (Playwright, headless), Viewport 400×800 (Smartphone/EDA52-Größe) und 1280×800.
 
 ## 1. Integrationstests (`npm test`) – 40 von 40 bestanden

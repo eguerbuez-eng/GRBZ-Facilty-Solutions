@@ -31,7 +31,7 @@ export const SCOPE_TYPES = {
 export const SCOPE_RANK = { alle: 1, abteilung: 2, beschaeftigungsart: 3, position: 4, mitarbeiter: 5, objekt: 6 };
 
 const num = (name, label, extra = {}) => ({ name, label, type: 'number', ...extra });
-const MODE_PCT_EUR = { name: 'mode', label: 'Berechnungsart', type: 'select', required: true, options: [{ value: 'prozent', label: 'Prozent auf den Stundensatz' }, { value: 'betrag_stunde', label: 'Fester Betrag je Stunde (€)' }] };
+const MODE_PCT_EUR = { name: 'mode', label: 'Zuschlagsart', type: 'select', required: true, options: [{ value: 'prozent', label: 'Prozent auf den Stundensatz' }, { value: 'betrag_stunde', label: 'Fester Betrag je Stunde (€)' }] };
 
 /**
  * Berechnungsarten. params = Eingabefelder (werden in der Oberfläche angezeigt

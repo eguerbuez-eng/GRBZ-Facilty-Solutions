@@ -133,6 +133,24 @@ export function buildForm(fields, values = {}, { onScan } = {}) {
         input._get = () => (d.value ? berlinToIso(d.value, t.value || '00:00') : '');
         break;
       }
+      case 'month':
+        input = h('input', { id, type: 'month', placeholder: 'JJJJ-MM', value: v ?? '', pattern: '\\d{4}-\\d{2}' });
+        break;
+      case 'dayhours': {
+        // Soll-Stunden je Wochentag (Speicherung in Minuten)
+        let arr = [0, 0, 0, 0, 0, 0, 0];
+        try { arr = Array.isArray(v) ? v : JSON.parse(v || '[0,0,0,0,0,0,0]'); } catch { /* Standard */ }
+        const cells = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((lab, i) => {
+          const inp = h('input', { type: 'text', inputmode: 'decimal', value: String(Math.round(((+arr[i] || 0) / 60) * 100) / 100).replace('.', ','), 'aria-label': lab, style: { textAlign: 'center', padding: '8px 4px' } });
+          return { inp, el: h('label', { style: { display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '.8rem', fontWeight: 650, textAlign: 'center' } }, lab, inp) };
+        });
+        const sum = h('div', { class: 'help' });
+        const upd = () => { const t = cells.reduce((s2, c) => s2 + (+c.inp.value.replace(',', '.') || 0), 0); sum.textContent = `Summe: ${String(Math.round(t * 100) / 100).replace('.', ',')} Std./Woche`; };
+        cells.forEach((c) => c.inp.addEventListener('input', upd)); upd();
+        input = h('div', { id }, h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' } }, cells.map((c) => c.el)), sum);
+        input._get = () => cells.map((c) => Math.round((+c.inp.value.replace(',', '.') || 0) * 60));
+        break;
+      }
       case 'weekdays': {
         const set = new Set(String(v || '').split(',').filter(Boolean).map(Number));
         input = h('div', { class: 'weekday-picker', id });

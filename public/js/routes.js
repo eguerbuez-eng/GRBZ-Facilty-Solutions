@@ -15,6 +15,7 @@ import { documentsView } from './views/documents.js';
 import { reportsView } from './views/reports.js';
 import { menuView, syncView, accountView, settingsView, auditView } from './views/admin.js';
 import { portalView, portalAccount } from './views/portal.js';
+import { planningView, absencesView, costsView, rulesView, hrSettingsView, rolesView } from './views/personnel.js';
 
 const ID = '([0-9a-fA-F-]{36})';
 const r = (pattern, view, perm, opts = {}) => ({ re: new RegExp('^' + pattern + '$'), view, perm, ...opts });
@@ -45,10 +46,16 @@ export const routes = [
   r(`/checklisten/${ID}`, checklistEditor, 'checklists.manage', { live: false }),
   r('/zeit', timeView, 'time.own'),
   r('/zeit/uebersicht', timeTeamView, 'time.all'),
-  r('/mitarbeiter', staffList, 'users.read'),
+  r('/mitarbeiter', staffList, ['users.read', 'hr.read']),
   r('/mitarbeiter/neu', staffForm, 'users.manage', { live: false }),
-  r(`/mitarbeiter/${ID}/bearbeiten`, staffForm, 'users.manage', { live: false }),
-  r(`/mitarbeiter/${ID}`, staffDetail, 'users.read'),
+  r(`/mitarbeiter/${ID}/bearbeiten`, staffForm, ['users.manage', 'hr.manage'], { live: false }),
+  r(`/mitarbeiter/${ID}`, staffDetail, ['users.read', 'hr.read']),
+  r('/dienstplan', planningView, ['planning.manage', 'shifts.own']),
+  r('/abwesenheiten', absencesView, ['absences.manage', 'absences.request']),
+  r('/personalkosten', costsView, 'hr.salary', { live: false }),
+  r('/lohnmodelle', rulesView, 'hr.rules'),
+  r('/personal/einstellungen', hrSettingsView, 'hr.manage'),
+  r('/rollen', rolesView, 'roles.manage'),
   r('/material', materialsList, 'materials.read'),
   r('/material/neu', materialForm, 'materials.write', { live: false }),
   r(`/material/${ID}/bearbeiten`, materialForm, 'materials.write', { live: false }),

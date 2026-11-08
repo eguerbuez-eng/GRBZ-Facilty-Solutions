@@ -20,7 +20,7 @@ export async function dashboardView() {
   const hour = new Date().getHours();
   const greet = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
   const el = h('div');
-  el.append(pageHead(`${greet}, ${u.name.split(' ')[0]}`, { sub: `${new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Berlin' }).format(new Date())} · ${ROLES[u.role]}` }));
+  el.append(pageHead(`${greet}, ${u.name.split(' ')[0]}`, { sub: `${new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Europe/Berlin' }).format(new Date())} · ${u.role_name || ROLES[u.role] || u.role}` }));
   if (stale) el.append(h('div', { class: 'notice warn' }, ic('wifiOff'), `Offline – Kennzahlen vom ${fmtDateTime(stale)}. Aufträge und Objektakten sind lokal verfügbar.`));
   else if (!data) el.append(h('div', { class: 'notice warn' }, ic('wifiOff'), 'Offline – Kennzahlen sind erst nach der ersten Verbindung verfügbar.'));
 

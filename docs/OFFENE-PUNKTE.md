@@ -20,6 +20,16 @@ Alle im README als implementiert aufgeführten Funktionen sind mit echter Datenb
 | Mehrsprachigkeit | Nur Deutsch (gefordert). |
 | Kundenportal: Fotos/Dokumente offline | Portal ist nur online nutzbar. |
 
+## Personalverwaltung – nicht umgesetzt
+| Punkt | Hinweis |
+|---|---|
+| Rechtsverbindliche Lohnabrechnung (Steuer, SV, DATEV-/Lohnbüro-Export im Fachformat) | bewusst nicht enthalten; CSV-Export der internen Werte vorhanden |
+| Gesetzliche Vorgaben (Mindestlohn, Zuschlagsgrenzen, ArbZG-Prüfungen, Minijob-Grenzen) | keine automatischen Prüfungen, keine hinterlegten Werte |
+| Automatische Feiertage je Bundesland | Feiertage manuell pflegen |
+| Urlaubsübertrag-Automatik zum Jahreswechsel, Verfall von Resturlaub | Resturlaub manuell in der Akte pflegen |
+| Kalender-Export / Benachrichtigung bei Dienstplanänderung | nicht vorhanden |
+| Zeitkonto-Berechnung bei sehr langen Historien | wird live berechnet; bei vielen Jahren Daten ggf. langsamer |
+
 ## Einschränkungen
 - Datumseingabefelder zeigen das Format der Browser-/Gerätesprache (auf deutschen Geräten TT.MM.JJJJ).
 - Dokumente und PDF-Berichte erfordern eine Verbindung; offline ist nur die Dokumentliste sichtbar.

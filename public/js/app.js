@@ -25,9 +25,15 @@ export const NAV = [
   { href: '#/kunden', label: 'Kunden', icon: 'briefcase', perm: 'customers.read' },
   { href: '#/objekte', label: 'Objekte', icon: 'building', perm: 'objects.read' },
   { href: '#/qr', label: 'QR-Codes', icon: 'qr', perm: 'qr.manage' },
-  { href: '#/mitarbeiter', label: 'Mitarbeiter', icon: 'users', perm: 'users.read' },
   { href: '#/material', label: 'Material', icon: 'box', perm: 'materials.read' },
   { href: '#/maschinen', label: 'Maschinen', icon: 'wrench', perm: 'machines.read' },
+  { group: 'Personal' },
+  { href: '#/mitarbeiter', label: 'Mitarbeiter', icon: 'users', perm: ['users.read', 'hr.read'] },
+  { href: '#/dienstplan', label: 'Dienstplan', icon: 'calendar', perm: ['planning.manage', 'shifts.own'] },
+  { href: '#/abwesenheiten', label: 'Urlaub & Abwesenheit', icon: 'calendar', perm: ['absences.manage', 'absences.request'] },
+  { href: '#/personalkosten', label: 'Personalkosten', icon: 'chart', perm: 'hr.salary' },
+  { href: '#/lohnmodelle', label: 'Berechnungsmodelle', icon: 'settings', perm: 'hr.rules' },
+  { href: '#/rollen', label: 'Rollen & Rechte', icon: 'key', perm: 'roles.manage' },
   { group: 'Planung & Auswertung' },
   { href: '#/serien', label: 'Serienaufträge', icon: 'repeat', perm: 'orders.write' },
   { href: '#/checklisten', label: 'Checklisten', icon: 'checkCircle', perm: 'checklists.manage' },
@@ -173,7 +179,7 @@ function renderShell(portal = false) {
       const a = h('a', { href: item.href }, ic(item.icon), item.label);
       navEls.push(a); side.append(a);
     }
-    side.append(h('div', { class: 'tiny muted', style: { padding: '16px 12px 4px' } }, `${user.name} · ${ROLES[user.role]}`));
+    side.append(h('div', { class: 'tiny muted', style: { padding: '16px 12px 4px' } }, `${user.name} · ${user.role_name || ROLES[user.role] || user.role}`));
   }
   const bottom = portal ? null : h('nav', { class: 'bottomnav', 'aria-label': 'Schnellnavigation' },
     navLink('#/', 'Start', 'home'),

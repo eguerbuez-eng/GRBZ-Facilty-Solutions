@@ -209,6 +209,17 @@ Object.assign(commands, {
     return { assigned: n };
   },
 
+  'object.setRevenue'(ctx, { object_id, monthly_revenue }) {
+    const { db, user } = ctx;
+    assertPerm(user, 'hr.salary');
+    requireRef(db, 'objects', object_id, 'Das Objekt');
+    const v = monthly_revenue === null || monthly_revenue === '' || monthly_revenue === undefined ? null : Number(String(monthly_revenue).replace(',', '.'));
+    if (v !== null && (!isFinite(v) || v < 0)) throw bad('Bitte einen gültigen Umsatz angeben.');
+    db.update('objects', object_id, { monthly_revenue: v });
+    db.audit(user.id, 'objekt.umsatz', 'objects', object_id);
+    return {};
+  },
+
   // ---------- Rollen & Rechte ----------
   'role.save'(ctx, { id, data = {}, base_version }) {
     const { db, user } = ctx;

@@ -17,7 +17,7 @@ Alles auf Deutsch · Euro · Datum TT.MM.JJJJ · Zeitzone Europe/Berlin.
 | Aufträge | Auftragsnummer, Status (Geplant, In Bearbeitung, Abgeschlossen, Unterbrochen, Mangel festgestellt), Serienaufträge (täglich, 2× wöchentlich, wöchentlich, 14-tägig, monatlich, individuell) |
 | Checklisten | Editor je Dienstleistung, Pflichtpunkte, Pflichtfotos; Ergebnisse Erledigt / Nicht erledigt / Nicht zutreffend / Mangel + Kommentar + Foto; Abschluss erst bei vollständigen Angaben |
 | Fotos | Vorher/Nachher/Schaden/Mangel, Kommentar, Zeitstempel, Zuordnung zu Objekt/Auftrag/Checklistenpunkt/Mangel/Einsatz/Maschine; offline gespeichert, später hochgeladen; EXIF/GPS wird entfernt; Kundenfreigabe |
-| Personal | Mitarbeiter-ID, Rollen (Administrator, Geschäftsführer, Objektleiter, Mitarbeiter), Rechtematrix, Objektzuordnung, Einmalpasswörter |
+| Personalverwaltung | Personalnummern G-0001 ff., eigene Beschäftigungsarten/Positionen/Abteilungen, vollständige Personalakte, Arbeitszeitmodelle, Urlaub & Krankmeldungen mit Genehmigung, Dienstplan, Vertretungsplanung, Soll/Ist & Überstundenkonto, frei konfigurierbare Rollen und Rechte, eigene Berechnungsmodelle (Löhne, Zuschläge, Überstunden, Fahrtkosten, Boni, Abzüge, Pausen, Rundung) und interne Personalkosten je Mitarbeiter/Objekt/Monat – siehe [docs/PERSONALVERWALTUNG.md](docs/PERSONALVERWALTUNG.md) |
 | Zeiterfassung | Beginn/Pause/Ende (auch offline), objekt- und auftragsbezogen, Monatsübersicht, Korrekturantrag mit Genehmigung und lückenlosem Protokoll, PDF/CSV |
 | Material | Artikel, Barcode, Bestand, Mindestbestand mit Warnung, Preise, Lieferant, Lagerort, Bewegungen (Verbrauch, Zugang, Inventur, Korrektur) |
 | Maschinen | Maschinenakte, Wartungen, Prüfungen, Reparaturen, Defektmeldungen, automatische Wartungsfälligkeit, Fotos, Wartungsbericht |
@@ -58,6 +58,7 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 |---|---|
 | [docs/INSTALLATION.md](docs/INSTALLATION.md) | Serverbetrieb, HTTPS, Reverse-Proxy, Datensicherung, Updates, Ersteinrichtung |
 | [docs/HONEYWELL-EDA52.md](docs/HONEYWELL-EDA52.md) | Einrichtung des EDA52, App-Installation, **Scanner-Konfiguration (Keyboard Wedge)**, **Offline-Einrichtung** |
+| [docs/PERSONALVERWALTUNG.md](docs/PERSONALVERWALTUNG.md) | Personalverwaltung, Berechnungsmodelle, Rechenweg, Migration |
 | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Architektur, Technologieentscheidungen, Datenbankmodell, Synchronisationslogik |
 | [docs/DATENSCHUTZ-SICHERHEIT.md](docs/DATENSCHUTZ-SICHERHEIT.md) | Umgesetzte Maßnahmen, Lösch-/Aufbewahrungskonzept, Prüfpunkte vor dem Produktivbetrieb |
 | [docs/TESTPROTOKOLL.md](docs/TESTPROTOKOLL.md) | Automatisierte Tests und Ergebnisse |
@@ -67,8 +68,8 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 ## Tests
 
 ```bash
-npm test             # 40 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
-npm run test:e2e     # Browser-End-to-End inkl. Offline-Ablauf (benötigt Playwright + Chromium)
+npm test             # 51 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
+npm run test:e2e     # Browser-Tests: Offline-Ablauf (11 Schritte) + Personalverwaltung (10 Schritte)
 ```
 
 ## Projektstruktur
