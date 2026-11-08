@@ -15,6 +15,7 @@ import { documentsView } from './views/documents.js';
 import { reportsView } from './views/reports.js';
 import { menuView, syncView, accountView, settingsView, auditView } from './views/admin.js';
 import { portalView, portalAccount } from './views/portal.js';
+import { adminDataView } from './views/admin-data.js';
 import { planningView, absencesView, costsView, rulesView, hrSettingsView, rolesView } from './views/personnel.js';
 
 const ID = '([0-9a-fA-F-]{36})';
@@ -76,6 +77,7 @@ export const routes = [
   r('/dokumente', documentsView, 'documents.read'),
   r('/berichte', reportsView, 'reports.create', { live: false }),
   r('/einstellungen', settingsView, 'settings.manage', { live: false }),
+  r('/admin/daten', adminDataView, null, { live: false }),
   r('/protokoll', auditView, 'audit.read', { live: false }),
   r('/sync', syncView),
   r('/konto', accountView, null, { live: false }),

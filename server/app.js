@@ -13,6 +13,7 @@ import {
 } from './auth.js';
 import { runCommand, generateAllRecurrences, numberFor } from './commands.js';
 import './commands-hr.js';
+import { adminRouter } from './admin.js';
 import { vacationInfo } from './commands-hr.js';
 import { computeCosts, computeEmployeeMonth, timeAccount } from './payroll.js';
 import { DISCLAIMER } from '../shared/hr.js';
@@ -161,7 +162,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
       const rows = selectScoped(db, req.user, t, 'seq > $since', { since });
       if (rows.length || since === 0) tables[t] = rows;
     }
-    const out = { cursor, full: since === 0, tables, user: publicUser(req.user), server_time: nowIso() };
+    const out = { cursor, full: since === 0, tables, user: publicUser(req.user), server_time: nowIso(), epoch: db.setting('data_epoch', '') };
     if (isScoped(req.user)) {
       out.visible = {
         objects: selectScoped(db, req.user, 'objects', 'deleted = 0').map((r) => r.id),
@@ -528,6 +529,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
     res.json({ ok: true });
   });
 
+  app.use('/api/admin', adminRouter({ db, dirs, log }));
   app.get('/api/admin/backup', requirePerm('settings.manage'), (req, res) => {
     const file = path.join(os.tmpdir(), `grbz-backup-${Date.now()}.sqlite`);
     db.raw.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);

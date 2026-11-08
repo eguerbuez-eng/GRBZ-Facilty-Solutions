@@ -1,7 +1,7 @@
 import { h, ic, card, empty, row, badge, pageHead, btn, kv, toast, errorToast, formDialog, tabs, buildForm, openUrl, confirmDialog } from '../ui.js';
 import * as store from '../store.js';
 import { ENTITIES } from '/shared/entities.js';
-import { may, refOptions, userLabel, pendingBadge, user } from './common.js';
+import { may, refOptions, userLabel, pendingBadge, user, isAdmin, adminDelete } from './common.js';
 import { WINTER_WEATHER, WINTER_ACTIVITIES } from '/shared/constants.js';
 import { fmtDate, fmtDateTime, fmtTime, fmtMinutes, seasonOf, fmtNumber } from '/shared/dates.js';
 import { takePhoto, photoGrid, signaturePad } from '../media.js';
@@ -85,9 +85,16 @@ export function winterDetail({ params }) {
   const photos = store.all('photos', (p) => p.winter_operation_id === op.id);
   const signed = op.status === 'abgeschlossen';
   const canEdit = !signed && (op.user_id === user().id || may('winter.write'));
+  const adminBtns = isAdmin() ? [
+    signed ? btn('Wieder öffnen', { icon: 'repeat', onclick: async () => {
+      const v = await formDialog('Einsatz wieder öffnen (Administrator)', [{ name: 'reason', label: 'Grund (die Unterschrift wird entfernt)', type: 'textarea', required: true }], {}, { submit: 'Wieder öffnen' });
+      if (v) store.command('winter.reopen', { id: op.id, reason: v.reason }).then(() => toast('Einsatz wieder geöffnet.')).catch(errorToast);
+    } }) : null,
+    btn('Löschen', { icon: 'trash', cls: 'danger', onclick: () => adminDelete('winter_operations', op.id, `Winterdiensteinsatz ${op.operation_no || ''}`, () => go('#/winter')) }),
+  ].filter(Boolean) : [];
   const selAreas = (() => { try { return JSON.parse(op.area_ids || '[]'); } catch { return []; } })();
   const el = h('div', null, pageHead(`Winterdienst · ${obj?.name || ''}`, { back: '#/winter', sub: [op.operation_no || 'Nr. wird vergeben', `Saison ${op.season}`, userLabel(op.user_id)].join(' · '),
-    actions: !op._pending ? [btn('Protokoll (PDF)', { icon: 'print', onclick: () => openUrl(`/api/reports/winter/${op.id}`) })] : [] }));
+    actions: [...(!op._pending ? [btn('Protokoll (PDF)', { icon: 'print', onclick: () => openUrl(`/api/reports/winter/${op.id}`) })] : []), ...adminBtns] }));
   if (signed) {
     el.append(h('div', { class: 'notice ok' }, ic('checkCircle'), `Unterschrieben am ${fmtDateTime(op.signed_at)} – Einsatz abgeschlossen.`));
     el.append(card('Einsatzprotokoll', kv([

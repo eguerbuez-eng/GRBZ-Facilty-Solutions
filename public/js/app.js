@@ -41,12 +41,13 @@ export const NAV = [
   { href: '#/berichte', label: 'Berichte & Exporte', icon: 'chart', perm: 'reports.create' },
   { group: 'System' },
   { href: '#/einstellungen', label: 'Einstellungen', icon: 'settings', perm: 'settings.manage' },
+  { href: '#/admin/daten', label: 'Datenverwaltung', icon: 'archive', admin: true },
   { href: '#/protokoll', label: 'Änderungsprotokoll', icon: 'history', perm: 'audit.read' },
   { href: '#/sync', label: 'Synchronisation', icon: 'sync' },
   { href: '#/konto', label: 'Mein Konto', icon: 'user' },
 ];
 
-export const allowed = (item) => !item.perm || [].concat(item.perm).some((p) => can(store.getUser(), p));
+export const allowed = (item) => (item.admin ? store.getUser()?.role === 'admin' : !item.perm || [].concat(item.perm).some((p) => can(store.getUser(), p)));
 export const getSettings = () => settings;
 
 async function boot() {

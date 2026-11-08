@@ -8,6 +8,13 @@ import { go } from '../app.js';
 import { scanWithCamera } from '../scanner.js';
 
 export const user = () => store.getUser();
+export const isAdmin = () => store.getUser()?.role === 'admin';
+/** Admin-Löschung (Papierkorb, wiederherstellbar) mit Sicherheitsabfrage */
+export async function adminDelete(table, id, label, after) {
+  const { confirmDialog: cd, toast: t, errorToast: et } = await import('../ui.js');
+  if (!(await cd(`${label} löschen? Der Datensatz wird in den Papierkorb verschoben und kann unter „Datenverwaltung“ wiederhergestellt werden. Die Löschung wird protokolliert.`, { danger: true, ok: 'Löschen', title: 'Administrator: Löschen' }))) return false;
+  try { await store.command('admin.delete', { table, id }); t('Gelöscht (Papierkorb).'); after?.(); return true; } catch (e) { et(e); return false; }
+}
 export const may = (p) => [].concat(p).some((x) => can(store.getUser(), x));
 
 /** Auswahllisten für Referenzfelder aus dem lokalen Bestand */
@@ -110,6 +117,10 @@ const ACTIONS = {
   'abwesenheit.geaendert': 'Abwesenheit geändert', 'dienstplan.kopiert': 'Dienstplan-Woche kopiert', 'vertretung.zugewiesen': 'Vertretung zugewiesen',
   'rolle.erstellt': 'Rolle angelegt', 'rolle.geaendert': 'Rolle/Rechte geändert', 'rolle.geloescht': 'Rolle gelöscht', 'pay_rules.erstellt': 'Berechnungsmodell angelegt',
   'pay_rules.geaendert': 'Berechnungsmodell geändert', 'pay_adjustments.erstellt': 'Einmalbetrag erfasst', 'export.personalkosten': 'Personalkosten exportiert', 'bericht.personalkosten': 'Personalkostenbericht erstellt',
+  'admin.geaendert': 'Administrator: Datensatz geändert', 'admin.geloescht': 'Administrator: gelöscht (Papierkorb)', 'admin.wiederhergestellt': 'Administrator: wiederhergestellt',
+  'admin.endgueltig_geloescht': 'Administrator: endgültig gelöscht', 'admin.korrektur_abgeschlossen': 'Administrator: abgeschlossenen Vorgang korrigiert', 'admin.abschluss_erzwungen': 'Administrator: Abschluss erzwungen',
+  'admin.winterdienst_geoeffnet': 'Administrator: Winterdiensteinsatz wieder geöffnet', 'admin.sicherung_erstellt': 'Sicherung erstellt', 'admin.sicherung_hochgeladen': 'Sicherung hochgeladen',
+  'admin.wiederhergestellt_sicherung': 'Daten aus Sicherung wiederhergestellt',
   'einstellungen.geaendert': 'Einstellungen geändert', 'einstellungen.logo': 'Logo geändert', 'passwort.geaendert': 'Passwort geändert',
   'ersteinrichtung.admin': 'Ersteinrichtung: Administrator angelegt', 'login.gesperrt': 'Konto nach Fehlversuchen gesperrt', 'export.zeit': 'Arbeitszeit exportiert',
   'backup.heruntergeladen': 'Datensicherung heruntergeladen', 'aufbewahrung.bereinigt': 'Alte Fotos bereinigt', 'dokument.geaendert': 'Dokument geändert',
@@ -124,6 +135,8 @@ export function auditText(a) {
   if (d.nr) t += ` (${d.nr})`;
   if (d.label) t += ` (${d.label})`;
   if (d.titel) t += `: ${d.titel}`;
+  if (a.entity && a.action.startsWith('admin.') && d.datensatz) t += ` – ${a.entity}: ${d.datensatz.name || d.datensatz.company_name || d.datensatz.title || d.datensatz.order_no || d.datensatz.id}`;
+  if (a.action === 'admin.geaendert' && d.neu) t += ` (${a.entity}: ${Object.keys(d.neu).join(', ')})`;
   if (a.action === 'auftrag.status' && d.nach) t += `: ${ORDER_STATUS[d.von] || d.von} → ${ORDER_STATUS[d.nach] || d.nach}`;
   return t;
 }

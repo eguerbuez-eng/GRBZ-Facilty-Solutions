@@ -1,7 +1,7 @@
 // Befehle der Personalverwaltung (Personalakte, Abwesenheiten, Dienstplan, Rollen).
 import { AppError, nowIso, uuid } from './db.js';
 import { assertPerm } from './auth.js';
-import { commands, bad, req, requireRef, checkVersion, touchOrderTree } from './commands.js';
+import { commands, bad, req, requireRef, checkVersion, touchOrderTree, isAdmin } from './commands.js';
 import { can, ROLE_PERMISSIONS, EMPLOYEE_STATUS, PAY_TYPES, ABSENCE_KINDS, SHIFT_STATUS } from '../shared/constants.js';
 import { ABSENCE_RULES, absenceWorkdays } from '../shared/hr.js';
 import { addDays, todayYmd } from '../shared/dates.js';
@@ -123,7 +123,7 @@ Object.assign(commands, {
     const { db, user } = ctx;
     assertPerm(user, 'absences.manage');
     const a = req(db.byId('absences', id), 'Abwesenheit nicht gefunden.');
-    if (a.status !== 'beantragt') throw bad('Dieser Antrag wurde bereits entschieden.');
+    if (a.status !== 'beantragt' && !isAdmin(user)) throw bad('Dieser Antrag wurde bereits entschieden.');
     const row = db.update('absences', id, { status: approve ? 'genehmigt' : 'abgelehnt', decided_by: user.id, decided_at: nowIso(), decision_note: note || null });
     db.audit(user.id, approve ? 'abwesenheit.genehmigt' : 'abwesenheit.abgelehnt', 'absences', id);
     return { row };
@@ -254,7 +254,8 @@ Object.assign(commands, {
     const { db, user } = ctx;
     assertPerm(user, 'roles.manage');
     const r = req(db.byId('roles', id), 'Rolle nicht gefunden.');
-    if (r.system) throw bad('Standardrollen können nicht gelöscht werden (deaktivieren ist möglich).');
+    if (r.system && !isAdmin(user)) throw bad('Standardrollen können nur vom Administrator gelöscht werden (deaktivieren ist möglich).');
+    if (['admin', 'kunde'].includes(r.role_key)) throw bad('Die Administrator- und die Kundenportal-Rolle sind für den Systembetrieb erforderlich und können nicht gelöscht werden.');
     const n = db.get('SELECT COUNT(*) c FROM users WHERE role = ? AND deleted = 0', r.role_key).c;
     if (n) throw bad(`Die Rolle ist noch ${n} Benutzer(n) zugewiesen.`);
     db.update('roles', id, { deleted: 1 });

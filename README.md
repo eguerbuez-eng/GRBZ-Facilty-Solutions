@@ -26,6 +26,7 @@ Alles auf Deutsch · Euro · Datum TT.MM.JJJJ · Zeitzone Europe/Berlin.
 | Dokumente | Upload (PDF, Bilder, Office), Zuordnung zu Kunde/Objekt/Maschine, Kundenfreigabe, Berichte direkt als Dokument ablegen |
 | Berichte | PDF mit GRBZ-Branding: Leistungsnachweis, Objektkontrollbericht, Monatsbericht, Fotodokumentation, Qualitätsbericht, Winterdienstprotokoll + Saison, Maschinenwartungsbericht, Arbeitszeitnachweis; CSV-Exporte |
 | Kundenportal | Optional (standardmäßig **deaktiviert**): eigene Objekte, Leistungsnachweise, freigegebene Fotos/Berichte/Dokumente, Reklamationen |
+| Administrator | Uneingeschränkte Rechte unabhängig vom Status (abgeschlossene/unterschriebene Vorgänge korrigieren, löschen, wieder öffnen), Datenverwaltung für alle Tabellen, Papierkorb mit Wiederherstellung und endgültigem Löschen, Sicherung/Wiederherstellung über die Oberfläche, lückenlose Protokollierung – siehe [docs/ADMINISTRATOR.md](docs/ADMINISTRATOR.md) |
 | Offline & Sync | Lokales Datenreplikat (IndexedDB), Warteschlange, automatische Synchronisation, Duplikatschutz, Konflikterkennung, Statusanzeige |
 
 Offene Punkte und Einschränkungen: [`docs/OFFENE-PUNKTE.md`](docs/OFFENE-PUNKTE.md).
@@ -58,6 +59,7 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 |---|---|
 | [docs/INSTALLATION.md](docs/INSTALLATION.md) | Serverbetrieb, HTTPS, Reverse-Proxy, Datensicherung, Updates, Ersteinrichtung |
 | [docs/HONEYWELL-EDA52.md](docs/HONEYWELL-EDA52.md) | Einrichtung des EDA52, App-Installation, **Scanner-Konfiguration (Keyboard Wedge)**, **Offline-Einrichtung** |
+| [docs/ADMINISTRATOR.md](docs/ADMINISTRATOR.md) | Administratorrechte, Datenverwaltung, Papierkorb, Sicherung/Wiederherstellung |
 | [docs/PERSONALVERWALTUNG.md](docs/PERSONALVERWALTUNG.md) | Personalverwaltung, Berechnungsmodelle, Rechenweg, Migration |
 | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Architektur, Technologieentscheidungen, Datenbankmodell, Synchronisationslogik |
 | [docs/DATENSCHUTZ-SICHERHEIT.md](docs/DATENSCHUTZ-SICHERHEIT.md) | Umgesetzte Maßnahmen, Lösch-/Aufbewahrungskonzept, Prüfpunkte vor dem Produktivbetrieb |
@@ -68,8 +70,8 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 ## Tests
 
 ```bash
-npm test             # 51 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
-npm run test:e2e     # Browser-Tests: Offline-Ablauf (11 Schritte) + Personalverwaltung (10 Schritte)
+npm test             # 62 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
+npm run test:e2e     # Browser-Tests: Offline-Ablauf (11) + Personalverwaltung (10) + Administrator (9 Schritte)
 ```
 
 ## Projektstruktur

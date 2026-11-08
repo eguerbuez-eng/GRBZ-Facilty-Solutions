@@ -1,6 +1,6 @@
 import { h, ic, card, empty, badge, pageHead, btn, toast, errorToast, formDialog, modal, tabs, openUrl } from '../ui.js';
 import * as store from '../store.js';
-import { may, refOptions, userLabel, user } from './common.js';
+import { may, refOptions, userLabel, user, isAdmin, adminDelete } from './common.js';
 import { fmtDate, fmtTime, fmtDateTime, fmtMinutes, todayYmd, ymdOf, berlinToIso, monthRange, fmtMonth, addDays } from '/shared/dates.js';
 import { TIME_CORRECTION_STATUS } from '/shared/constants.js';
 import { refresh } from '../app.js';
@@ -85,7 +85,9 @@ function monthCard(userId, manager) {
         h('div', { class: 'lead' }, ic(e.kind === 'pause' ? 'pause' : 'clock')),
         h('div', { class: 'grow' }, h('div', { class: 'title', style: { textDecoration: e.voided ? 'line-through' : '' } }, `${e.kind === 'pause' ? 'Pause' : 'Arbeit'} ${fmtTime(e.start_at)} – ${e.end_at ? fmtTime(e.end_at) : 'läuft'}`),
           h('div', { class: 'meta' }, [o, e.end_at ? fmtMinutes(dur(e)) : null, e.source !== 'stempel' ? { offline: 'offline erfasst', korrigiert: 'korrigiert', nachtrag: 'Nachtrag' }[e.source] : null, e.voided ? 'storniert/ungültig' : null].filter(Boolean).join(' · '))),
-        e._pending ? badge('offline', 'warn') : null, ic('edit', 'chev')));
+        e._pending ? badge('offline', 'warn') : null,
+        isAdmin() ? h('button', { class: 'btn ghost icon-btn', 'aria-label': 'Eintrag löschen', title: 'Löschen (Administrator)', onclick: (ev) => { ev.stopPropagation(); adminDelete('time_entries', e.id, 'Zeiteintrag'); } }, ic('trash')) : null,
+        ic('edit', 'chev')));
     }
   }
   const qs = `month=${month}${manager ? '&user_id=' + userId : ''}`;

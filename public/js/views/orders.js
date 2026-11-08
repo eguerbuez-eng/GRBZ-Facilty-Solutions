@@ -1,6 +1,6 @@
 import { h, ic, card, empty, row, badge, pageHead, btn, kv, searchBox, matches, toast, errorToast, modal, formDialog, confirmDialog, tabs, buildForm, openUrl } from '../ui.js';
 import * as store from '../store.js';
-import { may, refOptions, orderStatusBadge, pendingBadge, userLabel, phoneLink, mapLink, user } from './common.js';
+import { may, refOptions, orderStatusBadge, pendingBadge, userLabel, phoneLink, mapLink, user, isAdmin, adminDelete } from './common.js';
 import { CHECK_RESULTS, FREQUENCIES, WEEKDAYS } from '/shared/constants.js';
 import { checklistProblems } from '/shared/rules.js';
 import { fmtDate, fmtDateTime, todayYmd, addDays, fmtMinutes, fmtNumber } from '/shared/dates.js';
@@ -120,10 +120,18 @@ export function orderDetail({ params }) {
   const photos = store.all('photos', (p) => p.order_id === o.id);
   const done = items.filter((i) => i.result !== 'offen').length;
   const canExec = may('orders.write') || (may('orders.execute') && o.assigned_user_id === user().id);
-  const locked = !!o.completed_at;
+  const isDone = !!o.completed_at;
+  const locked = isDone && !isAdmin(); // Administrator darf auch abgeschlossene Aufträge korrigieren
   const el = h('div');
   const actions = [];
-  if (may('orders.write')) {
+  if (isAdmin()) {
+    actions.push(btn('Bearbeiten', { icon: 'edit', href: `#/auftraege/${o.id}/bearbeiten` }));
+    if (isDone) actions.push(btn('Wieder öffnen', { icon: 'repeat', onclick: async () => {
+      const v = await formDialog('Auftrag wieder öffnen (Administrator)', [{ name: 'note', label: 'Grund', type: 'textarea', required: true }], {}, { submit: 'Wieder öffnen' });
+      if (v) store.command('order.setStatus', { id: o.id, status: 'in_bearbeitung', note: `Wieder geöffnet (Administrator): ${v.note}` }).then(() => toast('Auftrag wieder geöffnet.')).catch(errorToast);
+    } }));
+    actions.push(btn('Löschen', { icon: 'trash', cls: 'danger', onclick: () => adminDelete('orders', o.id, `Auftrag ${o.order_no || ''}`, () => go('#/auftraege')) }));
+  } else if (may('orders.write')) {
     if (!locked) actions.push(btn('Bearbeiten', { icon: 'edit', href: `#/auftraege/${o.id}/bearbeiten` }));
     if (o.status === 'geplant' && !o.started_at) actions.push(btn('Löschen', { icon: 'trash', cls: 'danger', onclick: async () => {
       if (!(await confirmDialog('Auftrag wirklich löschen?', { danger: true, ok: 'Löschen' }))) return;
@@ -143,12 +151,13 @@ export function orderDetail({ params }) {
     const bar = h('div', { class: 'btn-row stretch', style: { margin: '12px 0' } });
     if (o.status === 'geplant' || o.status === 'unterbrochen') bar.append(btn(o.status === 'geplant' ? 'Auftrag starten' : 'Fortsetzen', { icon: 'play', cls: 'primary lg', onclick: () => startOrder(o) }));
     if (o.status === 'in_bearbeitung' || o.status === 'mangel') bar.append(btn('Unterbrechen', { icon: 'pause', cls: 'lg', onclick: () => interrupt(o) }));
-    if (o.status !== 'geplant' || items.length === 0) bar.append(btn('Abschließen', { icon: 'checkCircle', cls: 'dark lg', onclick: () => complete(o, items) }));
+    if (o.status !== 'geplant' || items.length === 0 || isAdmin()) bar.append(btn('Abschließen', { icon: 'checkCircle', cls: 'dark lg', onclick: () => complete(o, items) }));
     el.append(bar);
   }
-  if (locked) el.append(h('div', { class: o.status === 'mangel' ? 'notice warn' : 'notice ok' }, ic('checkCircle'), h('div', null,
+  if (isDone) el.append(h('div', { class: o.status === 'mangel' ? 'notice warn' : 'notice ok' }, ic('checkCircle'), h('div', null,
     h('strong', null, `Abgeschlossen am ${fmtDateTime(o.completed_at)}${o.completed_by ? ' von ' + userLabel(o.completed_by) : ''}`),
-    o.final_report ? h('div', { style: { whiteSpace: 'pre-line', marginTop: '4px' } }, o.final_report) : null)));
+    o.final_report ? h('div', { style: { whiteSpace: 'pre-line', marginTop: '4px' } }, o.final_report) : null,
+    isDone && isAdmin() ? h('div', { class: 'small', style: { marginTop: '4px' } }, 'Als Administrator können Sie diesen Auftrag weiterhin korrigieren; Änderungen werden protokolliert.') : null)));
 
   // Checkliste
   const progress = h('div', { class: 'card-pad', style: { paddingBottom: '4px' } },
@@ -235,9 +244,12 @@ async function interrupt(o) {
 
 async function complete(o, items) {
   const problems = checklistProblems(items, (id) => store.all('photos', (p) => p.checklist_item_id === id).length > 0);
+  let force = false;
   if (problems.length) {
-    await modal({ title: 'Checkliste unvollständig', body: h('div', null, h('p', null, 'Bitte vervollständigen Sie zuerst folgende Angaben:'), h('ul', null, problems.map((p) => h('li', null, p)))), actions: [{ label: 'OK', value: true, class: 'primary' }] });
-    return;
+    const r = await modal({ title: 'Checkliste unvollständig', body: h('div', null, h('p', null, 'Bitte vervollständigen Sie zuerst folgende Angaben:'), h('ul', null, problems.map((p) => h('li', null, p)))),
+      actions: [isAdmin() ? { label: 'Trotzdem abschließen (Administrator)', value: 'force', class: 'danger' } : null, { label: 'OK', value: true, class: 'primary' }].filter(Boolean) });
+    if (r !== 'force') return;
+    force = true;
   }
   const u = user();
   const running = store.all('time_entries', (e) => e.user_id === u.id && e.kind === 'arbeit' && !e.end_at && !e.voided && e.order_id === o.id)[0];
@@ -246,7 +258,7 @@ async function complete(o, items) {
   const v = await formDialog('Auftrag abschließen', fields, {}, { submit: 'Abschließen' });
   if (!v) return;
   try {
-    await store.command('order.complete', { id: o.id, final_report: v.final_report, at: new Date().toISOString() });
+    await store.command('order.complete', { id: o.id, final_report: v.final_report, at: new Date().toISOString(), force });
     if (running && v.stop) await store.command('time.clock', { action: 'stop' });
     toast('Auftrag abgeschlossen.');
   } catch (e) { errorToast(e); }

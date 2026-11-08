@@ -275,6 +275,9 @@ export async function pull(full = false) {
   }
   cursor = res.cursor;
   user = { ...res.user };
+  const knownEpoch = await metaGet('epoch', null);
+  if (knownEpoch !== null && res.epoch !== knownEpoch && !res.full) { await metaSet('epoch', res.epoch); return pull(true); }
+  await metaSet('epoch', res.epoch ?? '');
   status.lastSync = now();
   status.authLost = false;
   await metaSet('cursor', cursor);
@@ -409,7 +412,7 @@ const LOCAL = {
     const it = tx.get('order_checklist_items', p.item_id);
     if (!it) throw fail('Checklistenpunkt nicht gefunden.');
     const o = execOrder(tx, it.order_id);
-    if (o.completed_at) throw fail('Der Auftrag ist bereits abgeschlossen.');
+    if (o.completed_at && user.role !== 'admin') throw fail('Der Auftrag ist bereits abgeschlossen.');
     p.at = p.at || now();
     tx.put('order_checklist_items', { ...it, result: p.result, comment: p.comment ?? it.comment, checked_by: user.id, checked_at: p.at });
     if (o.status === 'geplant') tx.put('orders', { ...o, status: 'in_bearbeitung', started_at: o.started_at || p.at });
@@ -424,7 +427,7 @@ const LOCAL = {
     if (o.completed_at) return;
     const items = tx.all('order_checklist_items', (i) => i.order_id === o.id).sort((a, b) => a.position - b.position);
     const problems = checklistProblems(items, (itemId) => tx.all('photos', (ph) => ph.checklist_item_id === itemId).length > 0);
-    if (problems.length) throw fail('Die Checkliste ist noch nicht vollständig.', problems);
+    if (problems.length && !(p.force && user.role === 'admin')) throw fail('Die Checkliste ist noch nicht vollständig.', problems);
     p.at = p.at || now();
     tx.put('orders', { ...o, status: items.some((i) => i.result === 'mangel') ? 'mangel' : 'abgeschlossen', completed_at: p.at, completed_by: user.id, final_report: p.final_report || autoReport(items) });
   },
@@ -486,7 +489,7 @@ const LOCAL = {
     const data = { ...p.data };
     if (data.area_ids) data.area_ids = JSON.stringify(data.area_ids);
     if (ex) {
-      if (ex.status === 'abgeschlossen') throw fail('Der Einsatz ist bereits unterschrieben und abgeschlossen.');
+      if (ex.status === 'abgeschlossen' && user.role !== 'admin') throw fail('Der Einsatz ist bereits unterschrieben und abgeschlossen.');
       tx.put('winter_operations', { ...ex, ...data }); return;
     }
     if (!data.object_id) throw fail('Bitte ein Objekt auswählen.');

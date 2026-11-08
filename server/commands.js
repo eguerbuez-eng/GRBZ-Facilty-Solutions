@@ -19,6 +19,8 @@ export const GENERIC = ['customers', 'contact_history', 'services', 'objects', '
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HM = /^\d{2}:\d{2}$/;
 
+/** Administrator: höchste Stufe – wird durch den Status eines Datensatzes nicht blockiert. */
+export const isAdmin = (u) => u?.role === 'admin';
 export const bad = (msg) => new AppError(400, msg);
 export const req = (v, msg) => { if (v === undefined || v === null || v === '') throw bad(msg); return v; };
 const isIso = (v) => typeof v === 'string' && !isNaN(Date.parse(v));
@@ -388,7 +390,7 @@ export const commands = {
   'entity.delete'(ctx, { entity, id }) {
     const { db, user } = ctx;
     const def = ENTITIES[entity];
-    if (!def?.deletable || !GENERIC.includes(entity)) throw bad('Dieser Datentyp kann nicht gelöscht werden.');
+    if ((!def?.deletable && !isAdmin(user)) || !GENERIC.includes(entity)) throw bad('Dieser Datentyp kann nicht gelöscht werden.');
     assertPerm(user, def.write);
     db.update(def.table, id, { deleted: 1 });
     db.audit(user.id, `${entity}.geloescht`, entity, id);
@@ -456,15 +458,15 @@ export const commands = {
     if (patch.scheduled_time && !HM.test(patch.scheduled_time)) throw bad('Bitte eine gültige Uhrzeit angeben (HH:MM).');
     if (patch.assigned_user_id) requireRef(db, 'users', patch.assigned_user_id, 'Der Mitarbeiter');
     if (patch.object_id && patch.object_id !== existing.object_id) {
-      if (existing.status !== 'geplant') throw bad('Das Objekt kann nur bei geplanten Aufträgen geändert werden.');
+      if (existing.status !== 'geplant' && !isAdmin(user)) throw bad('Das Objekt kann nur bei geplanten Aufträgen geändert werden.');
       requireRef(db, 'objects', patch.object_id, 'Das Objekt');
       patch.customer_id = db.byId('objects', patch.object_id).customer_id;
     }
-    if (existing.completed_at && Object.keys(patch).some((k) => k !== 'notes')) throw bad('Abgeschlossene Aufträge können nicht mehr umgeplant werden.');
+    if (existing.completed_at && !isAdmin(user) && Object.keys(patch).some((k) => k !== 'notes')) throw bad('Abgeschlossene Aufträge können nicht mehr umgeplant werden.');
     const row = db.update('orders', id, patch);
     if ('template_id' in patch && patch.template_id !== existing.template_id) {
       const touched = db.get("SELECT COUNT(*) c FROM order_checklist_items WHERE order_id = ? AND result <> 'offen' AND deleted = 0", id).c;
-      if (touched) throw bad('Die Checkliste wurde bereits bearbeitet und kann nicht mehr ausgetauscht werden.');
+      if (touched && !isAdmin(user)) throw bad('Die Checkliste wurde bereits bearbeitet und kann nicht mehr ausgetauscht werden.');
       db.run('UPDATE order_checklist_items SET deleted = 1, seq = ? WHERE order_id = ?', db.nextSeq(), id);
       instantiateChecklist(db, row, patch.template_id, Array.isArray(data.item_ids) ? data.item_ids : []);
     }
@@ -477,9 +479,9 @@ export const commands = {
     const { db, user } = ctx;
     assertPerm(user, 'orders.write');
     const o = req(db.byId('orders', id), 'Auftrag nicht gefunden.');
-    if (o.status !== 'geplant' || o.started_at) throw bad('Nur noch nicht begonnene Aufträge können gelöscht werden.');
+    if ((o.status !== 'geplant' || o.started_at) && !isAdmin(user)) throw bad('Nur noch nicht begonnene Aufträge können gelöscht werden.');
     db.update('orders', id, { deleted: 1 });
-    db.audit(user.id, 'auftrag.geloescht', 'orders', id, { nr: o.order_no });
+    db.audit(user.id, 'auftrag.geloescht', 'orders', id, { nr: o.order_no, status: o.status, admin: isAdmin(user) || undefined });
     return {};
   },
 
@@ -502,7 +504,7 @@ export const commands = {
     const item = db.byId('order_checklist_items', item_id);
     if (!item || item.deleted) throw new AppError(404, 'Checklistenpunkt nicht gefunden.');
     const o = orderForExecution(db, user, item.order_id);
-    if (o.completed_at) throw bad('Der Auftrag ist bereits abgeschlossen.');
+    if (o.completed_at && !isAdmin(user)) throw bad('Der Auftrag ist bereits abgeschlossen.');
     if (!CHECK_RESULTS[result]) throw bad('Ungültiges Ergebnis.');
     const row = db.update('order_checklist_items', item_id, {
       result, comment: comment != null ? String(comment).slice(0, 2000) : item.comment,
@@ -510,26 +512,28 @@ export const commands = {
     });
     if (o.status === 'geplant') db.update('orders', o.id, { status: 'in_bearbeitung', started_at: o.started_at || (isIso(at) ? at : nowIso()) });
     if (result === 'mangel') deriveDefectForItem(db, ctx, o, row);
+    if (o.completed_at) db.audit(user.id, 'admin.korrektur_abgeschlossen', 'orders', o.id, { punkt: item.text, alt: item.result, neu: result });
     return { row };
   },
 
   'order.addItem'(ctx, { id, order_id, text, required }) {
     const { db, user } = ctx;
     const o = orderForExecution(db, user, order_id);
-    if (o.completed_at) throw bad('Der Auftrag ist bereits abgeschlossen.');
+    if (o.completed_at && !isAdmin(user)) throw bad('Der Auftrag ist bereits abgeschlossen.');
     req(String(text || '').trim(), 'Bitte einen Text eingeben.');
     const pos = db.get('SELECT COALESCE(MAX(position), -1) + 1 p FROM order_checklist_items WHERE order_id = ?', order_id).p;
     const row = db.insert('order_checklist_items', { id: id || uuid(), order_id, position: pos, text: String(text).trim().slice(0, 300), required: required ? 1 : 0 });
     return { row };
   },
 
-  'order.complete'(ctx, { id, final_report, at }) {
+  'order.complete'(ctx, { id, final_report, at, force }) {
     const { db, user } = ctx;
     const o = orderForExecution(db, user, id);
     if (o.completed_at) return { row: o }; // idempotent
     const items = db.all('SELECT * FROM order_checklist_items WHERE order_id = ? AND deleted = 0 ORDER BY position', id);
     const problems = checklistProblems(items, (itemId) => !!db.get('SELECT id FROM photos WHERE checklist_item_id = ? AND deleted = 0', itemId));
-    if (problems.length) throw new AppError(422, 'Die Checkliste ist noch nicht vollständig.', { details: problems });
+    if (problems.length && !(force && isAdmin(user))) throw new AppError(422, 'Die Checkliste ist noch nicht vollständig.', { details: problems });
+    if (problems.length) db.audit(user.id, 'admin.abschluss_erzwungen', 'orders', id, { offen: problems });
     const hasDefect = items.some((it) => it.result === 'mangel');
     const report = String(final_report || '').trim() || autoReport(items);
     const row = db.update('orders', id, {
@@ -723,14 +727,22 @@ export const commands = {
     const { db, user } = ctx;
     assertPerm(user, 'time.approve');
     const corr = req(db.byId('time_corrections', id), 'Korrekturantrag nicht gefunden.');
-    if (corr.status !== 'beantragt') throw bad('Dieser Antrag wurde bereits entschieden.');
+    if (corr.status !== 'beantragt' && !isAdmin(user)) throw bad('Dieser Antrag wurde bereits entschieden.');
     if (approve) {
       db.update('time_corrections', id, { decision_comment: comment || null });
       applyCorrection(db, db.byId('time_corrections', id), user.id);
     } else {
+      // Administrator nimmt eine bereits genehmigte Korrektur zurück → Originalwerte wiederherstellen
+      if (corr.status === 'genehmigt') {
+        const e = db.byId('time_entries', corr.entry_id);
+        const patch = { voided: corr.old_voided ?? 0 };
+        if (corr.old_start_at) patch.start_at = corr.old_start_at;
+        if (corr.old_end_at !== null && corr.old_end_at !== undefined) patch.end_at = corr.old_end_at;
+        db.update('time_entries', e.id, patch);
+      }
       db.update('time_corrections', id, { status: 'abgelehnt', decided_by: user.id, decided_at: nowIso(), decision_comment: comment || null });
     }
-    db.audit(user.id, approve ? 'zeit.korrektur_genehmigt' : 'zeit.korrektur_abgelehnt', 'time_corrections', id);
+    db.audit(user.id, approve ? 'zeit.korrektur_genehmigt' : 'zeit.korrektur_abgelehnt', 'time_corrections', id, corr.status !== 'beantragt' ? { vorher: corr.status, admin: true } : null);
     return { row: db.byId('time_corrections', id) };
   },
 
@@ -922,7 +934,8 @@ export const commands = {
       return { row };
     }
     if (existing.user_id !== user.id) assertPerm(user, 'winter.write');
-    if (existing.status === 'abgeschlossen') throw bad('Der Einsatz ist bereits unterschrieben und abgeschlossen.');
+    if (existing.status === 'abgeschlossen' && !isAdmin(user)) throw bad('Der Einsatz ist bereits unterschrieben und abgeschlossen.');
+    if (existing.status === 'abgeschlossen') db.audit(user.id, 'admin.korrektur_abgeschlossen', 'winter_operations', id, { felder: Object.keys(d) });
     checkVersion(existing, base_version);
     if (d.start_at) d.season = seasonOf(d.start_at);
     const st = d.start_at || existing.start_at;

@@ -1,5 +1,25 @@
 # Testprotokoll
 
+## Version 1.2 – Administratorrechte (08.11.2026)
+
+`npm test`: **62 von 62** bestanden (51 bisherige unverändert + 11 neue in `tests/admin.test.js`).
+`npm run test:e2e`: **11/11** Offline-Ablauf, **10/10** Personalverwaltung (beide unverändert) + **9/9** Administrator (`tests-e2e/admin.mjs`).
+
+| Geprüft | Ergebnis |
+|---|---|
+| Abgeschlossener Auftrag: Admin korrigiert Checkliste und plant um; Mitarbeiter und Objektleiter werden abgewiesen | ✓ |
+| Abgeschlossenen Auftrag löschen nur Admin; Abschluss trotz unvollständiger Checkliste nur Admin (mit Protokoll) | ✓ |
+| Unterschriebener Winterdienst: Admin korrigiert und öffnet wieder; andere Rollen nicht | ✓ |
+| Entschiedene Zeitkorrektur durch Admin zurückgenommen → Originalzeit wiederhergestellt; Abwesenheit umentschieden | ✓ |
+| Datenverwaltung serverseitig nur für Admin (Geschäftsführer und Objektleiter: 403) | ✓ |
+| Direkte Feldänderung mit Protokoll alt/neu; gesperrte Felder (Passwort, ID) werden ignoriert | ✓ |
+| Löschen → Papierkorb → Wiederherstellen → endgültig löschen (nur mit Bestätigung, abhängige Einträge mitgelöscht) | ✓ |
+| Bestandsbewegung löschen korrigiert Bestand; Schutz vor Selbstaussperrung | ✓ |
+| Sicherung erstellen, Wiederherstellung nur mit Bestätigung, vorherige Sicherung automatisch, Geräte laden neu, Download | ✓ |
+| Oberfläche: Erzwungener Abschluss, Korrektur/Wiedereröffnung, Löschen/Papierkorb/Wiederherstellen, Direktbearbeitung, endgültiges Löschen nur mit eingegebener Bestätigung, Sicherung/Wiederherstellung, Protokoll, GF ohne Zugriff | ✓ |
+
+---
+
 ## Version 1.1 – Personalverwaltung (08.11.2026)
 
 `npm test`: **51 von 51** bestanden (40 bisherige unverändert + 11 neue in `tests/personnel.test.js`).

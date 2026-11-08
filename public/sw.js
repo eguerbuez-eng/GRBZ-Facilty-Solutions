@@ -28,6 +28,7 @@ const PRECACHE = [
   '/shared/hr.js',
   '/shared/rules.js',
   '/vendor/jsQR.js',
+  '/js/views/admin-data.js',
   '/js/views/admin.js',
   '/js/views/checklists.js',
   '/js/views/common.js',
