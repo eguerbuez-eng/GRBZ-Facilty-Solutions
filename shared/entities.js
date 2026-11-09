@@ -4,6 +4,7 @@
 
 import { DEFECT_KINDS, DEFECT_STATUS, WINTER_WEATHER, WINTER_ACTIVITIES } from './constants.js';
 import { RULE_KINDS, SCOPE_TYPES } from './hr.js';
+import { MATERIAL_CATEGORIES, MACHINE_TYPES, MATERIAL_STATUS } from './inventory.js';
 
 const opt = (o) => Object.entries(o).map(([value, label]) => ({ value, label }));
 
@@ -72,21 +73,25 @@ export const ENTITIES = {
     ],
   },
   materials: {
-    label: 'Artikel', plural: 'Material', table: 'materials', numberField: 'article_no',
+    label: 'Artikel', plural: 'Inventar', table: 'materials', numberField: 'article_no',
     read: 'materials.read', write: 'materials.write', archivable: true,
     title: (r) => r.name, subtitle: (r) => [r.article_no, r.location].filter(Boolean).join(' · '),
-    search: ['article_no', 'barcode', 'name', 'supplier', 'location'],
+    search: ['article_no', 'barcode', 'name', 'supplier', 'location', 'manufacturer', 'model'],
     fields: [
       { name: 'name', label: 'Bezeichnung', type: 'text', required: true, list: true },
-      { name: 'category', label: 'Kategorie', type: 'select', options: opt({ reinigungsmittel: 'Reinigungsmittel', verbrauchsmaterial: 'Verbrauchsmaterial', werkzeug: 'Werkzeug', arbeitskleidung: 'Arbeitskleidung', ersatzteil: 'Ersatzteil', inventar: 'Inventar' }), required: true, default: 'verbrauchsmaterial', list: true },
+      { name: 'category', label: 'Gegenstandsart', type: 'select', options: Object.entries(MATERIAL_CATEGORIES).map(([value, c]) => ({ value, label: c.label })), required: true, default: 'verbrauchsmaterial', list: true },
+      { name: 'barcode', label: 'Barcode / EAN', type: 'text', scan: true, help: 'Hersteller-Barcode scannen oder leer lassen und später einen eigenen Inventarbarcode erzeugen.' },
       { name: 'article_no', label: 'Artikelnummer', type: 'text', help: 'Leer lassen für automatische Vergabe.' },
-      { name: 'barcode', label: 'Barcode / EAN', type: 'text', scan: true },
+      { name: 'manufacturer', label: 'Hersteller', type: 'text', half: true },
+      { name: 'model', label: 'Modell / Typ', type: 'text', half: true },
       { name: 'unit', label: 'Einheit', type: 'text', default: 'Stück', half: true },
       { name: 'min_stock', label: 'Mindestbestand', type: 'number', half: true, default: 0 },
-      { name: 'stock', label: 'Anfangsbestand', type: 'number', createOnly: true, default: 0, help: 'Spätere Änderungen nur über Bestandsbewegungen.' },
+      { name: 'stock', label: 'Anfangsbestand', type: 'number', createOnly: true, required: true, help: 'Tatsächlich vorhandene Menge. Spätere Änderungen nur über Bestandsbuchungen.' },
+      { name: 'status', label: 'Status', type: 'select', options: Object.entries(MATERIAL_STATUS).map(([value, label]) => ({ value, label })), default: 'verfuegbar', half: true },
+      { name: 'location', label: 'Lagerort / Standort', type: 'text', half: true },
+      { name: 'object_id', label: 'Zugeordnetes Objekt', type: 'ref', ref: 'objects' },
       { name: 'purchase_price', label: 'Einkaufspreis (€)', type: 'money', half: true },
       { name: 'supplier', label: 'Lieferant', type: 'text', half: true },
-      { name: 'location', label: 'Lagerort', type: 'text' },
       { name: 'notes', label: 'Notizen', type: 'textarea' },
     ],
   },
@@ -94,9 +99,11 @@ export const ENTITIES = {
     label: 'Maschine', plural: 'Maschinen', table: 'machines', numberField: 'inventory_no',
     read: 'machines.read', write: 'machines.write', archivable: true,
     title: (r) => r.name, subtitle: (r) => [r.inventory_no, r.manufacturer, r.model].filter(Boolean).join(' · '),
-    search: ['inventory_no', 'name', 'manufacturer', 'model', 'serial_no', 'location'],
+    search: ['inventory_no', 'barcode', 'name', 'manufacturer', 'model', 'serial_no', 'location'],
     fields: [
       { name: 'name', label: 'Bezeichnung', type: 'text', required: true, list: true },
+      { name: 'machine_type', label: 'Gegenstandsart', type: 'select', options: Object.entries(MACHINE_TYPES).map(([value, label]) => ({ value, label })), required: true, default: 'reinigungsmaschine' },
+      { name: 'barcode', label: 'Barcode', type: 'text', scan: true, help: 'Barcode des Geräts scannen oder leer lassen und später einen eigenen Inventarbarcode erzeugen.' },
       { name: 'inventory_no', label: 'Inventarnummer', type: 'text', help: 'Leer lassen für automatische Vergabe.' },
       { name: 'manufacturer', label: 'Hersteller', type: 'text', half: true },
       { name: 'model', label: 'Modell', type: 'text', half: true },
@@ -105,6 +112,7 @@ export const ENTITIES = {
       { name: 'purchase_price', label: 'Kaufpreis (€)', type: 'money', half: true },
       { name: 'condition', label: 'Zustand', type: 'select', options: opt({ neu: 'Neu', gut: 'Gut', gebraucht: 'Gebraucht', defekt: 'Defekt', in_reparatur: 'In Reparatur', ausgemustert: 'Ausgemustert' }), default: 'gut', list: true },
       { name: 'location', label: 'Standort', type: 'text' },
+      { name: 'object_id', label: 'Zugeordnetes Objekt', type: 'ref', ref: 'objects' },
       { name: 'responsible_user_id', label: 'Verantwortlicher Mitarbeiter', type: 'ref', ref: 'users' },
       { name: 'maintenance_interval_days', label: 'Wartungsintervall (Tage)', type: 'number', half: true },
       { name: 'next_maintenance', label: 'Nächste Wartung', type: 'date', half: true, list: true },

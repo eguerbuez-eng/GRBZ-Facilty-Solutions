@@ -4,6 +4,7 @@ import { ENTITIES } from '/shared/entities.js';
 import { may, entityFormPage, archiveToggle, userLabel } from './common.js';
 import { fmtDate, fmtMoney, todayYmd, addDays } from '/shared/dates.js';
 import { createQr, showQr } from './qr.js';
+import { itemCard } from './inventory-actions.js';
 import { takePhoto, photoGrid } from '../media.js';
 import { documentsCard } from './documents.js';
 import { refresh } from '../app.js';
@@ -12,7 +13,7 @@ const def = ENTITIES.machines;
 const condLabel = (v) => def.fields.find((f) => f.name === 'condition').options.find((o) => o.value === v)?.label || v || '';
 const condKind = (v) => ({ defekt: 'bad', in_reparatur: 'warn', ausgemustert: '', neu: 'ok', gut: 'ok' })[v] || 'outline';
 const st = { q: '' };
-const KINDS = { wartung: 'Wartung', pruefung: 'Prüfung', reparatur: 'Reparatur', defekt: 'Defekt' };
+const KINDS = { wartung: 'Wartung', pruefung: 'Prüfung', reparatur: 'Reparatur', defekt: 'Defekt', zustand: 'Zustand', standort: 'Standort / Objekt', ausgabe: 'Ausgabe', ruecknahme: 'Rücknahme' };
 
 export function machinesList() {
   const today = todayYmd();
@@ -43,6 +44,7 @@ export function machineDetail({ params }) {
   const qrs = store.all('qr_codes', (q) => q.machine_id === m.id);
   const photos = store.all('photos', (p) => p.machine_id === m.id);
   const actions = [btn('Wartungsbericht', { icon: 'print', onclick: () => openUrl(`/api/reports/machine/${m.id}`) })];
+  if (m.barcode && may('machines.write')) actions.push(btn('Etikett', { icon: 'qr', onclick: () => openUrl(`/api/inventory/labels.pdf?items=machine:${m.id}`) }));
   if (may('machines.write')) actions.unshift(btn('Bearbeiten', { icon: 'edit', href: `#/maschinen/${m.id}/bearbeiten` }), btn('Archivieren', { icon: 'archive', onclick: () => archiveToggle('machines', m) }));
   const addEvent = (kind) => async () => {
     const fields = [
@@ -59,11 +61,8 @@ export function machineDetail({ params }) {
   return h('div', null,
     pageHead(m.name, { back: '#/maschinen', sub: [m.inventory_no || 'Nr. wird vergeben', m.manufacturer, m.model].filter(Boolean).join(' · '), actions }),
     m.condition === 'defekt' ? h('div', { class: 'notice bad' }, ic('alert'), 'Diese Maschine ist als defekt gemeldet.') : null,
-    h('div', { class: 'quick', style: { marginBottom: '12px' } },
-      h('a', { href: '#', onclick: (e) => { e.preventDefault(); addEvent('defekt')(); } }, ic('alert'), 'Defekt melden'),
-      may('machines.write') ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); addEvent('wartung')(); } }, ic('wrench'), 'Wartung') : null,
-      may('machines.write') ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); addEvent('reparatur')(); } }, ic('check'), 'Reparatur') : null,
-      may('photos.write') ? h('a', { href: '#', onclick: (e) => { e.preventDefault(); takePhoto({ machine_id: m.id }, { category: 'sonstiges' }); } }, ic('camera'), 'Foto') : null),
+    itemCard('machine', m, { onChanged: refresh }),
+    may('photos.write') ? h('div', { class: 'btn-row', style: { margin: '12px 0' } }, btn('Foto aufnehmen', { cls: 'sm', icon: 'camera', onclick: () => takePhoto({ machine_id: m.id }, { category: 'sonstiges' }) })) : null,
     h('div', { class: 'grid two' },
       card('Maschinenakte', kv([
         ['Inventarnummer', m.inventory_no], ['Zustand', badge(condLabel(m.condition), condKind(m.condition))], ['Hersteller', m.manufacturer], ['Modell', m.model],

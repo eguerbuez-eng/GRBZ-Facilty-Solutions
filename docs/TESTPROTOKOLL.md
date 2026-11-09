@@ -1,5 +1,29 @@
 # Testprotokoll
 
+## Version 1.3 – Inventar & systemweiter Scanner (09.11.2026)
+
+`npm test`: **72 von 72** (62 bisherige + 10 in `tests/inventory.test.js`). `npm run test:e2e`: **11/11, 10/10, 9/9** (bisherige) + **14/14** (`tests-e2e/inventar.mjs`).
+
+| Ihre Testanforderung | Umsetzung im Test | Ergebnis |
+|---|---|---|
+| 1. Bekannten Artikel scannen | Scan ohne Fokus → Name, Artikelnr., Barcode, Art, Bestand, Verfügbar, Lagerort | ✓ |
+| 2. Unbekannten Barcode scannen | Neuanlage öffnet automatisch, Barcode übernommen und gesperrt | ✓ |
+| 3. Neue Maschine über Barcode | Maschine angelegt (MAS-…), Barcode dauerhaft zugeordnet, Einzelstück-Anzeige | ✓ |
+| 4. Verbrauchsmaterial scannen, Bestand anzeigen | „24 Stück“, Lagerort, Status | ✓ |
+| 5. Bestand erhöhen und reduzieren | +6 → 30, −4 → 26, protokolliert; negativer Bestand wird abgefangen | ✓ |
+| 6. Maschine einem Objekt zuordnen | Zuordnung gespeichert, angezeigt, Historie | ✓ |
+| 7. Mehrere Barcodes hintereinander | zwei Codes direkt nacheinander → zwei Ergebnisse; dritter identischer Code (Doppelscan) ignoriert | ✓ |
+| 8. Ohne vorher ein Feld anzuklicken | alle Scans im Test ohne Fokus | ✓ |
+| 9. Während ein Textfeld aktiv ist | Suchfeld „Müll“ und Kundenname „Müller GmbH“ bleiben unverändert; Formular wird nicht verlassen; Weitertippen funktioniert | ✓ |
+| 10. Offline | Scan + Entnahme offline, Anzeige 25 Stück, Server unverändert; nach Verbindung synchronisiert | ✓ |
+| 11. EDA52 mit tatsächlicher Konfiguration | **nicht durchgeführt – kein Gerät verfügbar.** Simuliert: schnelle Tastenanschläge + Enter, Texteinfügung in einem Stück, Android-Tastencode 229, Präfix-Modus. Prüfliste: HONEYWELL-EDA52.md | offen |
+| Zusätzlich | eindeutige Barcodes (Artikel/Maschine/Artikelnummer), eigene GRBZ-INV-Codes + Etiketten-PDF, Ausgabe/Rücknahme (Werkzeug vs. Verbrauchsmaterial), Rechte (Mitarbeiterin: Entnahme ja, Zubuchen/Neuanlage nein), Admin-Löschung einer Ausgabe korrigiert verfügbare Menge | ✓ |
+
+Ein beim Testen gefundener und behobener Fehler: In aktiven Eingabefeldern wurden Scannerzeichen doppelt erfasst. Ebenfalls korrigiert:
+Einfügen eines ganzen Textes (Autovervollständigung, Passwortmanager) wird nur noch dann als Scan gewertet, wenn unmittelbar Enter folgt.
+
+---
+
 ## Version 1.2 – Administratorrechte (08.11.2026)
 
 `npm test`: **62 von 62** bestanden (51 bisherige unverändert + 11 neue in `tests/admin.test.js`).

@@ -386,3 +386,23 @@ input[type="checkbox"], input[type="radio"] { width: 22px; height: 22px; min-hei
   .ci-actions button { font-size: .66rem; min-height: 50px; }
   .kpi .value { font-size: 1.6rem; }
 }
+
+/* ---------- Inventar-Scanner ---------- */
+.inv-scan { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.inv-status { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ok); background: var(--ok-soft); padding: 10px 14px; border-radius: 10px; transition: background .2s; }
+.inv-status .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ok); animation: pulse 1.6s infinite; flex-shrink: 0; }
+.inv-status.ok { background: var(--accent); color: #fff; } .inv-status.ok .dot { background: #fff; }
+.inv-status.warn { background: var(--warn-soft); color: var(--warn); } .inv-status.warn .dot { background: var(--warn); }
+.inv-results { margin-top: 12px; }
+.inv-results .inv-old { opacity: .78; }
+.inv-card { padding: 14px 16px; }
+.inv-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.inv-head .lead { width: 44px; height: 44px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-dark); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.inv-head .lead svg { width: 22px; height: 22px; }
+.inv-head .grow { flex: 1; min-width: 180px; }
+.inv-stock { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 4px; }
+.inv-stock > div { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.inv-stock .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.inv-stock .value { font-size: 1.5rem; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; }
+.inv-card .kv { padding: 8px 0; }
+.inv-actions { margin-top: 8px; }

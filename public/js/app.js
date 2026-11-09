@@ -2,7 +2,7 @@
 import { h, ic, clear, toast, errorToast, loading, modal, buildForm } from './ui.js';
 import * as store from './store.js';
 import { api } from './api.js';
-import { installWedge, onScan } from './scanner.js';
+import { installWedge, setDefaultScanHandler } from './scanner.js';
 import { can, ROLES } from '/shared/constants.js';
 import { fmtDateTime } from '/shared/dates.js';
 import { handleScan } from './views/qr.js';
@@ -25,7 +25,7 @@ export const NAV = [
   { href: '#/kunden', label: 'Kunden', icon: 'briefcase', perm: 'customers.read' },
   { href: '#/objekte', label: 'Objekte', icon: 'building', perm: 'objects.read' },
   { href: '#/qr', label: 'QR-Codes', icon: 'qr', perm: 'qr.manage' },
-  { href: '#/material', label: 'Material', icon: 'box', perm: 'materials.read' },
+  { href: '#/material', label: 'Inventar', icon: 'box', perm: ['materials.read', 'machines.read'] },
   { href: '#/maschinen', label: 'Maschinen', icon: 'wrench', perm: 'machines.read' },
   { group: 'Personal' },
   { href: '#/mitarbeiter', label: 'Mitarbeiter', icon: 'users', perm: ['users.read', 'hr.read'] },
@@ -58,7 +58,7 @@ async function boot() {
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   await store.init();
   installWedge();
-  onScan((code, method) => { if (store.getUser() && store.getUser().role !== 'kunde') handleScan(code, method); });
+  setDefaultScanHandler((code, method) => (store.getUser() && store.getUser().role !== 'kunde' ? handleScan(code, method) : null));
   try { settings = await api('GET', '/api/settings/public'); localStorage.setItem('grbz_settings', JSON.stringify(settings)); } catch {
     try { settings = JSON.parse(localStorage.getItem('grbz_settings')) || settings; } catch { /* Standard */ }
   }

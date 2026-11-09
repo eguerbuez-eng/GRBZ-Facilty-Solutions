@@ -179,10 +179,10 @@ try {
     await page.locator('.field', { hasText: 'Mindestbestand' }).locator('input').fill('2');
     await page.locator('.field', { hasText: 'Anfangsbestand' }).locator('input').fill('3');
     await page.click('button:has-text("Anlegen")');
-    await page.waitForSelector('text=Aktueller Bestand');
-    await page.click('button:has-text("Verbrauch")');
+    await page.waitForSelector('text=Vorhandener Bestand');
+    await page.click('button:has-text("Bestand −")');
     await page.locator('.modal .field', { hasText: 'Menge' }).locator('input').fill('2');
-    await page.click('.modal-foot button:has-text("Speichern")');
+    await page.click('.modal-foot button:has-text("Buchen")');
     await page.waitForSelector('text=Mindestbestand (2');
   });
 

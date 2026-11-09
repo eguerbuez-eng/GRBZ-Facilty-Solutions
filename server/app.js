@@ -14,6 +14,8 @@ import {
 import { runCommand, generateAllRecurrences, numberFor } from './commands.js';
 import './commands-hr.js';
 import { adminRouter } from './admin.js';
+import './commands-inventory.js';
+import { inventoryRouter } from './inventory.js';
 import { vacationInfo } from './commands-hr.js';
 import { computeCosts, computeEmployeeMonth, timeAccount } from './payroll.js';
 import { DISCLAIMER } from '../shared/hr.js';
@@ -530,6 +532,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), dbFile, log = con
   });
 
   app.use('/api/admin', adminRouter({ db, dirs, log }));
+  app.use('/api/inventory', inventoryRouter({ db, dirs }));
   app.get('/api/admin/backup', requirePerm('settings.manage'), (req, res) => {
     const file = path.join(os.tmpdir(), `grbz-backup-${Date.now()}.sqlite`);
     db.raw.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);

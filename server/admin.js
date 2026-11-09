@@ -11,6 +11,18 @@ import { AppError, nowIso } from './db.js';
 import { commands, bad, req, isAdmin } from './commands.js';
 import { SYNC_TABLES } from '../shared/entities.js';
 import { SCHEMA_VERSION } from './migrations.js';
+import { categoryMode } from '../shared/inventory.js';
+
+/** Wirkung einer Bestandsbewegung umkehren (sign = -1) bzw. wieder anwenden (sign = +1) */
+function applyMovement(db, mv, sign) {
+  const m = db.byId('materials', mv.material_id);
+  if (!m) return;
+  if (['ausgabe', 'ruecknahme'].includes(mv.kind) && categoryMode(m.category) === 'leihe') {
+    db.update('materials', m.id, { issued: Math.max(0, Math.round(((m.issued || 0) - sign * mv.qty) * 1000) / 1000) });
+  } else {
+    db.update('materials', m.id, { stock: Math.round((m.stock + sign * mv.qty) * 1000) / 1000 });
+  }
+}
 
 const LOCKED_COLS = ['id', 'created_at', 'updated_at', 'version', 'seq', 'deleted', 'password_hash', 'token'];
 const ADMIN_TABLES = SYNC_TABLES; // alle fachlichen Tabellen
@@ -88,10 +100,7 @@ Object.assign(commands, {
       db.update(table, id, { deleted: 1 });
     }
     // Bestand bei gelöschter Bestandsbewegung korrigieren
-    if (table === 'stock_movements' && !ex.deleted) {
-      const m = db.byId('materials', ex.material_id);
-      if (m) db.update('materials', m.id, { stock: Math.round((m.stock - ex.qty) * 1000) / 1000 });
-    }
+    if (table === 'stock_movements' && !ex.deleted) applyMovement(db, ex, -1);
     db.audit(user.id, 'admin.geloescht', table, id, { datensatz: snapshot(ex) });
     return {};
   },
@@ -102,10 +111,7 @@ Object.assign(commands, {
     const ex = req(db.byId(table, id), 'Datensatz nicht gefunden.');
     if (!ex.deleted) return { row: ex };
     const row = db.update(table, id, { deleted: 0 });
-    if (table === 'stock_movements') {
-      const m = db.byId('materials', ex.material_id);
-      if (m) db.update('materials', m.id, { stock: Math.round((m.stock + ex.qty) * 1000) / 1000 });
-    }
+    if (table === 'stock_movements') applyMovement(db, ex, +1);
     db.audit(user.id, 'admin.wiederhergestellt', table, id, { datensatz: snapshot(ex) });
     return { row };
   },

@@ -775,7 +775,7 @@ export const commands = {
     const { db, user } = ctx;
     const m = db.byId('machines', p.machine_id);
     if (!m || m.deleted) throw bad('Maschine nicht gefunden.');
-    const kinds = ['wartung', 'reparatur', 'defekt', 'pruefung'];
+    const kinds = ['wartung', 'reparatur', 'defekt', 'pruefung', 'zustand'];
     if (!kinds.includes(p.kind)) throw bad('Unbekannte Ereignisart.');
     if (p.kind === 'defekt') assertPerm(user, 'machines.read'); else assertPerm(user, 'machines.write');
     const date = YMD.test(p.event_date || '') ? p.event_date : todayYmd();
@@ -786,6 +786,11 @@ export const commands = {
       status: p.kind === 'defekt' ? 'offen' : 'erledigt', user_id: user.id,
     });
     const patch = {};
+    if (p.kind === 'zustand') {
+      const allowed = ['neu', 'gut', 'gebraucht', 'defekt', 'in_reparatur', 'ausgemustert'];
+      if (!allowed.includes(p.condition)) throw bad('Bitte den Zustand auswählen.');
+      patch.condition = p.condition;
+    }
     if (p.kind === 'defekt') patch.condition = 'defekt';
     if (p.kind === 'reparatur' && ['defekt', 'in_reparatur'].includes(m.condition)) patch.condition = 'gut';
     if (p.kind === 'wartung' || p.kind === 'pruefung') {

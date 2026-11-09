@@ -5,6 +5,8 @@ import { may, refOptions, userLabel } from './common.js';
 import { QR_AREA_TYPES, QR_TARGET_TYPES } from '/shared/constants.js';
 import { fmtDateTime } from '/shared/dates.js';
 import { go, refresh } from '../app.js';
+import { findInventory } from '/shared/inventory.js';
+import { openInventoryScan } from './materials.js';
 
 // ---------- Scan-Verarbeitung ----------
 function findLocal(raw) {
@@ -14,10 +16,8 @@ function findLocal(raw) {
   if (!qr && /^GRBZ-QR-\d+$/i.test(s)) qr = store.all('qr_codes', (q) => q.label === s.toUpperCase())[0];
   if (qr) return { qr };
   if (/^GRBZ-OBJ-\d+$/i.test(s)) { const o = store.all('objects', (x) => x.object_no === s.toUpperCase())[0]; if (o) return { target: { type: 'object', id: o.id } }; }
-  const mat = store.all('materials', (m) => m.barcode === s || m.article_no === s)[0];
-  if (mat) return { target: { type: 'material', id: mat.id } };
-  const mach = store.all('machines', (m) => m.inventory_no === s || m.serial_no === s)[0];
-  if (mach) return { target: { type: 'machine', id: mach.id } };
+  const inv = findInventory(s, { materials: store.all('materials'), machines: store.all('machines'), qr_codes: [] });
+  if (inv) return { target: { type: inv.type, id: inv.id } };
   return { token };
 }
 
@@ -27,10 +27,10 @@ function targetOf(qr) {
   return { type: 'material', id: qr.material_id };
 }
 
-function navigateTo(t) {
+function navigateTo(t, code) {
   if (t.type === 'object') go(`#/objekte/${t.id}${t.area_name ? '?bereich=' + encodeURIComponent(t.area_name) : ''}`);
-  else if (t.type === 'machine') go(`#/maschinen/${t.id}`);
-  else go(`#/material/${t.id}?scan=1`);
+  // Inventar (Artikel/Maschine): Ergebnis direkt im Inventar-Scanbereich anzeigen
+  else openInventoryScan(code);
 }
 
 let busy = false;
@@ -49,17 +49,23 @@ export async function handleScan(raw, method = 'manuell') {
       const t = targetOf(local.qr);
       store.command('scan.log', { id, raw, method, local_result: 'ok' }).catch(() => {});
       navigator.vibrate?.(40);
-      navigateTo(t);
+      navigateTo(t, raw);
       return;
     }
     if (local.target) {
       store.command('scan.log', { id, raw, method, local_result: 'ok' }).catch(() => {});
-      navigateTo(local.target);
+      navigateTo(local.target, raw);
+      return;
+    }
+    // Unbekannter Barcode (kein GRBZ-QR): Inventar öffnen und Neuanlage anbieten
+    if (!local.token && may(['materials.write', 'machines.write'])) {
+      store.command('scan.log', { id, raw, method, local_result: 'unbekannt' }).catch(() => {});
+      openInventoryScan(raw);
       return;
     }
     // Nicht lokal bekannt → Server fragen (falls online)
     const r = await store.command('scan.log', { id, raw, method, local_result: 'unbekannt' });
-    if (r.synced && r.result === 'ok' && r.target) { navigateTo(r.target); return; }
+    if (r.synced && r.result === 'ok' && r.target) { navigateTo(r.target, raw); return; }
     const msg = r.queued ? 'Code nicht in den lokalen Daten gefunden (offline). Bitte nach der nächsten Synchronisation erneut scannen.'
       : r.result === 'inaktiv' ? 'Dieser QR-Code ist deaktiviert.' : r.result === 'kein_zugriff' ? 'Für dieses Objekt haben Sie keine Berechtigung.' : `Unbekannter Code: ${String(raw).slice(0, 60)}`;
     toast(msg, 'bad', 5000);
@@ -68,7 +74,7 @@ export async function handleScan(raw, method = 'manuell') {
 
 // ---------- Scan-Seite ----------
 export function scanView() {
-  const input = h('input', { class: 'wedge-input', placeholder: 'Scanner-Eingabe oder Code eintippen', autocomplete: 'off', 'aria-label': 'Code', dataset: { wedge: '1' } });
+  const input = h('input', { class: 'wedge-input', placeholder: 'Scanner-Eingabe oder Code eintippen', autocomplete: 'off', 'aria-label': 'Code', dataset: { scanInput: '1' } });
   const submit = () => { const v = input.value.trim(); if (v) { input.value = ''; handleScan(v, 'manuell'); } };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
   const mine = store.all('scans', (s) => s.user_id === store.getUser().id).sort((a, b) => b.scanned_at.localeCompare(a.scanned_at)).slice(0, 8);

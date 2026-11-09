@@ -14,6 +14,7 @@ import { SYNC_TABLES, ENTITIES } from '/shared/entities.js';
 import { checklistProblems, autoReport } from '/shared/rules.js';
 import { seasonOf, todayYmd } from '/shared/dates.js';
 import { can } from '/shared/constants.js';
+import { categoryMode } from '/shared/inventory.js';
 import { idbAll, idbGet, idbPut, idbDel, idbClear, idbBatch, metaGet, metaSet } from './idb.js';
 import { api, ApiError } from './api.js';
 
@@ -464,9 +465,25 @@ const LOCAL = {
     if (!m) throw fail('Artikel nicht gefunden.');
     const n = Number(String(p.qty).replace(',', '.'));
     if (!isFinite(n) || (p.kind !== 'korrektur' && p.kind !== 'inventur' && n <= 0)) throw fail('Bitte eine gültige Menge angeben.');
-    const delta = p.kind === 'verbrauch' ? -n : p.kind === 'inventur' ? n - m.stock : n;
-    tx.put('stock_movements', { id: p.id, material_id: m.id, qty: delta, kind: p.kind, object_id: p.object_id || null, order_id: p.order_id || null, user_id: user.id, note: p.note || null, moved_at: now(), deleted: 0 });
-    tx.put('materials', { ...m, stock: Math.round((m.stock + delta) * 1000) / 1000 });
+    const leihe = categoryMode(m.category) === 'leihe';
+    let delta = 0; let issued = m.issued || 0;
+    if (p.kind === 'verbrauch') delta = -n;
+    else if (p.kind === 'inventur') delta = n - m.stock;
+    else if (p.kind === 'ausgabe') { if (!p.recipient_user_id) throw fail('Bitte den Mitarbeiter wählen, an den ausgegeben wird.'); if (leihe) issued += n; else delta = -n; }
+    else if (p.kind === 'ruecknahme') { if (leihe) { if (n > issued + 1e-9) throw fail(`Es sind nur ${issued} ${m.unit || ''} ausgegeben.`); issued -= n; } else delta = n; }
+    else delta = n;
+    const stock = Math.round((m.stock + delta) * 1000) / 1000;
+    if ((stock < 0 || (leihe && stock - issued < 0)) && !p.allow_negative) throw new ApiError(`Der Bestand würde negativ werden (${stock} ${m.unit || ''}).`, { status: 409 });
+    tx.put('stock_movements', { id: p.id, material_id: m.id, qty: delta || (p.kind === 'ausgabe' ? -n : n), kind: p.kind, object_id: p.object_id || null, order_id: p.order_id || null, user_id: user.id, recipient_user_id: p.recipient_user_id || null, note: p.note || null, moved_at: now(), stock_after: stock, deleted: 0 });
+    tx.put('materials', { ...m, stock, issued: Math.round(issued * 1000) / 1000 });
+  },
+  'machine.assign'(p, tx) {
+    const m = tx.get('machines', p.id);
+    if (!m) throw fail('Maschine nicht gefunden.');
+    const patch = p.action === 'objekt' ? { object_id: p.object_id || null } : p.action === 'standort' ? { location: p.location || null } : p.action === 'ausgabe' ? { issued_to_user_id: p.user_id } : { issued_to_user_id: null };
+    if (p.action === 'ausgabe' && !p.user_id) throw fail('Bitte den Mitarbeiter wählen.');
+    if (p.action === 'ruecknahme' && !m.issued_to_user_id) throw fail('Die Maschine ist nicht ausgegeben.');
+    tx.put('machines', { ...m, ...patch });
   },
   'scan.log'(p, tx) { tx.put('scans', { id: p.id, raw: p.raw, method: p.method, result: p.local_result || 'offline', user_id: user.id, scanned_at: p.scanned_at || now(), deleted: 0 }); },
   'defect.save'(p, tx) {
@@ -510,6 +527,7 @@ const LOCAL = {
     if (!String(p.description || '').trim()) throw fail('Bitte eine Beschreibung angeben.');
     tx.put('machine_events', { id: p.id, machine_id: m.id, kind: p.kind, event_date: p.event_date || todayYmd(), description: p.description, cost: p.cost || null, performed_by: p.performed_by || null, status: p.kind === 'defekt' ? 'offen' : 'erledigt', user_id: user.id, deleted: 0 });
     if (p.kind === 'defekt') tx.put('machines', { ...m, condition: 'defekt' });
+    if (p.kind === 'zustand' && p.condition) tx.put('machines', { ...m, condition: p.condition });
   },
   'inspection.save'(p, tx) {
     const items = (p.items || []).filter((i) => String(i.text || '').trim());

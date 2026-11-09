@@ -5,7 +5,7 @@ import { may, auditText, user } from './common.js';
 import { ROLES } from '/shared/constants.js';
 import { fmtDateTime } from '/shared/dates.js';
 import { NAV, allowed, showPasswordChange, getSettings, refresh } from '../app.js';
-import { onScan } from '../scanner.js';
+import { onScan, setScanConsumer, scannerConfig, saveScannerConfig, scanStats } from '../scanner.js';
 
 export function menuView() {
   const tiles = h('div', { class: 'tiles' });
@@ -61,8 +61,22 @@ function opText(op) { return `${OP_LABELS[op.type] || op.type}${op.payload?.enti
 export function accountView() {
   const u = user();
   const scanOut = h('div', { class: 'mono small', style: { minHeight: '22px', marginTop: '8px' } }, '–');
-  const off = onScan((code, method) => { scanOut.textContent = `${method}: ${code}`; });
-  setTimeout(() => { const chk = setInterval(() => { if (!scanOut.isConnected) { off(); clearInterval(chk); } }, 2000); }, 100);
+  // Scanner-Test: Scans werden hier nur angezeigt (nicht weiterverarbeitet)
+  const keyLog = h('div', { class: 'mono tiny muted', style: { marginTop: '6px', wordBreak: 'break-all' } });
+  const off = onScan((code, method, meta) => { scanOut.textContent = `${meta?.duplicate ? '(Doppelscan ignoriert) ' : ''}${method === 'scanner' ? 'Scanner' : method}: ${code}${meta?.field ? ' · Empfang: ' + meta.field : ''}${meta?.gaps ? ' · max. Zeichenabstand ' + meta.gaps + ' ms' : ''}`; });
+  const offConsumer = setScanConsumer(() => {}, { allowInModal: true });
+  const raw = []; let lastT = 0;
+  const kd = (e) => { const t = e.timeStamp; raw.push(`${e.key === 'Unidentified' ? '⍰' : e.key.length === 1 ? e.key : '[' + e.key + ']'}${lastT ? '+' + Math.round(t - lastT) : ''}`); lastT = t; raw.splice(0, Math.max(0, raw.length - 40)); keyLog.textContent = 'Tastenereignisse (Zeichen+ms): ' + raw.join(' '); };
+  window.addEventListener('keydown', kd, true);
+  setTimeout(() => { const chk = setInterval(() => { if (!scanOut.isConnected) { off(); offConsumer(); window.removeEventListener('keydown', kd, true); clearInterval(chk); } }, 1000); }, 100);
+  const sc = scannerConfig();
+  const cfgForm = buildForm([
+    { name: 'maxGap', label: 'Max. Zeichenabstand eines Scans (ms)', type: 'number', half: true, help: 'Standard 45. Menschliches Tippen ist langsamer.' },
+    { name: 'minLen', label: 'Mindestlänge eines Codes', type: 'number', half: true },
+    { name: 'prefix', label: 'Präfix-Zeichen (optional)', type: 'text', half: true, help: 'Nur wenn im Honeywell-Profil ein Präfix eingestellt ist, z. B. „§“.' },
+    { name: 'dedupeMs', label: 'Doppelscan-Sperre (ms)', type: 'number', half: true },
+    { name: 'sink', label: 'Empfangsfeld-Modus (falls Scans ohne aktives Feld nicht ankommen)', type: 'bool' },
+  ], { ...sc, sink: sc.sink ? 1 : 0 });
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   return h('div', null,
     pageHead('Mein Konto', { sub: `${u.name} · ${u.role_name || ROLES[u.role] || u.role}` }),
@@ -80,7 +94,11 @@ export function accountView() {
       ['Installiert als App', standalone ? 'ja' : 'nein – im Browsermenü „Zum Startbildschirm hinzufügen“ / „App installieren“ wählen'],
       ['Kamera-Scanning', 'BarcodeDetector' in window ? 'BarcodeDetector (nativ)' : 'jsQR (Software)'], ['Offline-Speicher', 'indexedDB' in window ? 'verfügbar' : 'nicht verfügbar'],
       ['Version', getSettings().version || '–'],
-    ]), h('div', { class: 'card-pad' }, h('strong', null, 'Scanner-Test'), h('p', { class: 'small muted' }, 'Hardware-Scantaste drücken (Honeywell EDA52) – der erkannte Code erscheint hier. Erscheint nichts, bitte die Keyboard-Wedge-Einstellung prüfen (siehe Handbuch).'), scanOut)), { iconName: 'scan' }));
+    ]), h('div', { class: 'card-pad' }, h('strong', null, 'Scanner-Test'), h('p', { class: 'small muted' }, 'Hardware-Scantaste drücken (Honeywell EDA52) – der erkannte Code erscheint hier, ohne verarbeitet zu werden. Erscheint nichts, bitte die Keyboard-Wedge-Einstellung prüfen (siehe Handbuch).'), scanOut, keyLog,
+      h('p', { class: 'tiny muted' }, `Seit App-Start erkannt: ${scanStats.received}, Doppelscans ignoriert: ${scanStats.duplicates}`))), { iconName: 'scan' }),
+    card('Scanner-Einstellungen (dieses Gerät)', h('div', { class: 'card-pad' }, cfgForm.el, h('div', { class: 'form-actions' },
+      btn('Standard', { onclick: () => { saveScannerConfig({ maxGap: 45, minLen: 4, prefix: '', dedupeMs: 1200, sink: false }); toast('Standardwerte gesetzt.'); refresh(); } }),
+      btn('Speichern', { cls: 'primary', icon: 'check', onclick: () => { const v = cfgForm.values(); saveScannerConfig({ maxGap: Math.max(10, +v.maxGap || 45), minLen: Math.max(1, +v.minLen || 4), prefix: (v.prefix || '').slice(0, 1), dedupeMs: Math.max(0, +v.dedupeMs || 0), sink: !!v.sink }); toast('Scanner-Einstellungen gespeichert.'); } }))), { iconName: 'settings' }));
 }
 
 // ---------- Einstellungen ----------

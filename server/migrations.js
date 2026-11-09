@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { fmtPersonnelNo } from '../shared/hr.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 function ensureColumn(db, table, column, ddl) {
   const cols = db.raw.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -63,6 +63,23 @@ export function migrate(db, file, log = console.log) {
   ensureColumn(db, 'users', 'legacy_employee_no', 'TEXT');
   ensureColumn(db, 'objects', 'monthly_revenue', 'REAL');
   ensureColumn(db, 'documents', 'user_id', 'TEXT');
+  // v3: Inventar-Scanner
+  ensureColumn(db, 'materials', 'manufacturer', 'TEXT');
+  ensureColumn(db, 'materials', 'model', 'TEXT');
+  ensureColumn(db, 'materials', 'status', "TEXT NOT NULL DEFAULT 'verfuegbar'");
+  ensureColumn(db, 'materials', 'object_id', 'TEXT');
+  ensureColumn(db, 'materials', 'issued', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn(db, 'machines', 'barcode', 'TEXT');
+  ensureColumn(db, 'machines', 'machine_type', "TEXT NOT NULL DEFAULT 'maschine'");
+  ensureColumn(db, 'machines', 'object_id', 'TEXT');
+  ensureColumn(db, 'machines', 'issued_to_user_id', 'TEXT');
+  ensureColumn(db, 'stock_movements', 'recipient_user_id', 'TEXT');
+  ensureColumn(db, 'stock_movements', 'stock_after', 'REAL');
+  // Eindeutige Barcodes je Tabelle (nur aktive Datensätze). Bestehende Dubletten blockieren den Start nicht.
+  for (const [t, col] of [['materials', 'barcode'], ['machines', 'barcode']]) {
+    try { db.raw.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_${t}_${col} ON ${t}(${col}) WHERE ${col} IS NOT NULL AND ${col} <> '' AND deleted = 0`); }
+    catch (e) { log?.(`Hinweis: doppelte Barcodes in ${t} vorhanden – bitte bereinigen (${e.message})`); }
+  }
 
   if (version < 2) {
     db.tx(() => {

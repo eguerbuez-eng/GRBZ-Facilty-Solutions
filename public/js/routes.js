@@ -57,7 +57,7 @@ export const routes = [
   r('/lohnmodelle', rulesView, 'hr.rules'),
   r('/personal/einstellungen', hrSettingsView, 'hr.manage'),
   r('/rollen', rolesView, 'roles.manage'),
-  r('/material', materialsList, 'materials.read'),
+  r('/material', materialsList, ['materials.read', 'machines.read'], { live: false }),
   r('/material/neu', materialForm, 'materials.write', { live: false }),
   r(`/material/${ID}/bearbeiten`, materialForm, 'materials.write', { live: false }),
   r(`/material/${ID}`, materialDetail, 'materials.read'),

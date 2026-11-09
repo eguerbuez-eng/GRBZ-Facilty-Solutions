@@ -19,7 +19,7 @@ Alles auf Deutsch · Euro · Datum TT.MM.JJJJ · Zeitzone Europe/Berlin.
 | Fotos | Vorher/Nachher/Schaden/Mangel, Kommentar, Zeitstempel, Zuordnung zu Objekt/Auftrag/Checklistenpunkt/Mangel/Einsatz/Maschine; offline gespeichert, später hochgeladen; EXIF/GPS wird entfernt; Kundenfreigabe |
 | Personalverwaltung | Personalnummern G-0001 ff., eigene Beschäftigungsarten/Positionen/Abteilungen, vollständige Personalakte, Arbeitszeitmodelle, Urlaub & Krankmeldungen mit Genehmigung, Dienstplan, Vertretungsplanung, Soll/Ist & Überstundenkonto, frei konfigurierbare Rollen und Rechte, eigene Berechnungsmodelle (Löhne, Zuschläge, Überstunden, Fahrtkosten, Boni, Abzüge, Pausen, Rundung) und interne Personalkosten je Mitarbeiter/Objekt/Monat – siehe [docs/PERSONALVERWALTUNG.md](docs/PERSONALVERWALTUNG.md) |
 | Zeiterfassung | Beginn/Pause/Ende (auch offline), objekt- und auftragsbezogen, Monatsübersicht, Korrekturantrag mit Genehmigung und lückenlosem Protokoll, PDF/CSV |
-| Material | Artikel, Barcode, Bestand, Mindestbestand mit Warnung, Preise, Lieferant, Lagerort, Bewegungen (Verbrauch, Zugang, Inventur, Korrektur) |
+| Inventar & Scanner | Systemweiter Barcode-/QR-Scanner ohne Klick (Honeywell EDA52 Keyboard-Wedge), Inventar-Scanbereich mit sofortiger Erkennung, Neuanlage über unbekannte Barcodes, Artikel vs. Maschinen/Einzelgeräte, Bestand/verfügbar, Ausgabe und Rücknahme, Standort, Objekt, Zustand, Wartung, eigene eindeutige Inventarbarcodes mit Etiketten, Schutz vor negativem Bestand und Doppelbuchungen – siehe [docs/INVENTAR-SCANNER.md](docs/INVENTAR-SCANNER.md) |
 | Maschinen | Maschinenakte, Wartungen, Prüfungen, Reparaturen, Defektmeldungen, automatische Wartungsfälligkeit, Fotos, Wartungsbericht |
 | Qualität | Objektkontrollen mit Bewertung (0–5 → %), Mängel/Reklamationen/Schäden mit Verantwortlichem, Frist, Maßnahmen, Erledigungsnachweis, Abnahme, vollständigem Verlauf |
 | Winterdienst | Einsatzflächen, Bereitschaftszeiten, Einsatzprotokoll (Beginn/Ende, Wetter, Temperatur, Schneehöhe, Flächen, Streumittel/-menge, Fotos), Unterschrift, Saisonübersicht |
@@ -59,6 +59,7 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 |---|---|
 | [docs/INSTALLATION.md](docs/INSTALLATION.md) | Serverbetrieb, HTTPS, Reverse-Proxy, Datensicherung, Updates, Ersteinrichtung |
 | [docs/HONEYWELL-EDA52.md](docs/HONEYWELL-EDA52.md) | Einrichtung des EDA52, App-Installation, **Scanner-Konfiguration (Keyboard Wedge)**, **Offline-Einrichtung** |
+| [docs/INVENTAR-SCANNER.md](docs/INVENTAR-SCANNER.md) | Inventar, Barcode-Scanner, Bestandsführung |
 | [docs/ADMINISTRATOR.md](docs/ADMINISTRATOR.md) | Administratorrechte, Datenverwaltung, Papierkorb, Sicherung/Wiederherstellung |
 | [docs/PERSONALVERWALTUNG.md](docs/PERSONALVERWALTUNG.md) | Personalverwaltung, Berechnungsmodelle, Rechenweg, Migration |
 | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) | Architektur, Technologieentscheidungen, Datenbankmodell, Synchronisationslogik |
@@ -70,8 +71,8 @@ Für Tests mit dem EDA52 im lokalen Netz siehe [`docs/INSTALLATION.md`](docs/INS
 ## Tests
 
 ```bash
-npm test             # 62 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
-npm run test:e2e     # Browser-Tests: Offline-Ablauf (11) + Personalverwaltung (10) + Administrator (9 Schritte)
+npm test             # 72 API-/Integrationstests (echte Datenbank, echter HTTP-Server)
+npm run test:e2e     # Browser-Tests: Offline (11) + Personal (10) + Administrator (9) + Inventar/Scanner (14 Schritte)
 ```
 
 ## Projektstruktur

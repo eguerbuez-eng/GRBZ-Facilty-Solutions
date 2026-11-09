@@ -20,6 +20,14 @@ Alle im README als implementiert aufgeführten Funktionen sind mit echter Datenb
 | Mehrsprachigkeit | Nur Deutsch (gefordert). |
 | Kundenportal: Fotos/Dokumente offline | Portal ist nur online nutzbar. |
 
+## Inventar & Scanner – offen
+| Punkt | Hinweis |
+|---|---|
+| Test mit dem physischen Honeywell EDA52 | Prüfliste in HONEYWELL-EDA52.md; Erkennung ist über Scanner-Einstellungen anpassbar |
+| Mehrere Barcodes je Gegenstand | je Gegenstand ein Barcode + beliebige GRBZ-QR-Etiketten; Artikel-/Inventar-/Seriennummern werden ebenfalls erkannt |
+| Lagerplätze als eigene Stammdaten, Umlagerung zwischen Lagern mit getrennten Beständen | Lagerort ist ein Textfeld je Gegenstand |
+| Ausgabe-Übersicht „Was hat Mitarbeiter X?“ als eigene Liste | in den Bewegungen bzw. der Maschinenakte nachvollziehbar |
+
 ## Personalverwaltung – nicht umgesetzt
 | Punkt | Hinweis |
 |---|---|

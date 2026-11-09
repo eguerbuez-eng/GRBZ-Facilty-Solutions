@@ -39,15 +39,33 @@ Einstellungen am EDA52 (sinngemäß):
 3. **Symbology Settings**: **QR Code** aktivieren; zusätzlich EAN-13/EAN-8, Code 128 (für Hersteller-Barcodes von Artikeln).
 4. Optional: **Scan-Taste** auf „Scan“ belegt lassen; „Good read“-Ton/Vibration nach Wunsch.
 
-**Funktionstest:** In der App *Mein Konto → Scanner-Test* öffnen und die Scantaste drücken. Der Code erscheint mit der
-Quelle „scanner“. Erscheint nichts: Wedge/Suffix prüfen. Erscheinen nur Teile oder falsche Zeichen: Tastaturlayout bzw.
-„Character encoding“ auf UTF-8/Standard stellen.
+**Funktionstest:** In der App *Mein Konto → Scanner-Test* öffnen und die Scantaste drücken. Angezeigt werden der Code,
+der Empfangsweg (ohne Fokus / Eingabefeld / Texteinfügung / Präfix / Empfangsfeld) und der größte Zeichenabstand in Millisekunden.
+Darunter stehen die rohen Tastenereignisse. Im Test-Modus werden Scans nicht verarbeitet.
 
-**Verhalten in der App**
-- Auf jeder Seite (ohne aktives Eingabefeld): Scan eines GRBZ-QR-Codes öffnet sofort die Objektakte, den Bereich, die Maschine bzw. den Artikel.
-- Scan eines Hersteller-Barcodes öffnet den passenden Artikel (Feld „Barcode/EAN“ im Artikel).
-- Steht der Cursor in einem Barcode-Feld (z. B. beim Anlegen eines Artikels), wird der Code in dieses Feld geschrieben.
-- Seite **„QR-Code scannen“**: enthält ein Scanner-Eingabefeld; funktioniert auch mit manueller Eingabe (z. B. `GRBZ-OBJ-0001`).
+**So erkennt die App den Scanner (Version 1.3)**
+- Ohne Klick in ein Feld: Zeichen mit ≤ 45 ms Abstand + Enter = Scan. Menschliches Tippen ist langsamer und bleibt unberührt.
+- In einem aktiven Text-/Notizfeld: Der Scan wird erkannt und der vorherige Feldinhalt sofort wiederhergestellt.
+- Sendet das Gerät den Code als Text in einem Stück (Android-„InputConnection“) gefolgt von Enter, wird das ebenfalls erkannt.
+- Ohne Enter-Suffix: Nach 140 ms Pause wird ein schneller Zeichenblock (ab 6 Zeichen) als Scan gewertet. **Empfohlen bleibt das Enter-Suffix.**
+
+**Falls Scans nicht ankommen oder falsch erkannt werden** (Mein Konto → Scanner-Einstellungen):
+1. *Max. Zeichenabstand* erhöhen (z. B. 80 ms), wenn im Scanner-Test größere Abstände angezeigt werden
+   (Honeywell-Einstellung „Inter-character delay“ möglichst 0).
+2. *Präfix-Zeichen*: Im Honeywell-Profil unter Data Processing → **Prefix** ein selten genutztes Zeichen eintragen (z. B. `~`)
+   und dasselbe Zeichen in der App setzen. Dann ist die Erkennung unabhängig von der Geschwindigkeit eindeutig.
+3. *Empfangsfeld-Modus* einschalten, wenn Scans nur ankommen, solange ein Eingabefeld aktiv ist
+   (manche Wedge-Methoden senden nur an fokussierte Felder). Die App hält dann ein unsichtbares Feld ohne Bildschirmtastatur bereit.
+
+**Prüfliste für den Gerätetest am EDA52 (bitte einmal durchführen)**
+- [ ] Scanner-Test: EAN-13-Barcode eines Produkts → Code korrekt, Empfangsweg „ohne Fokus“
+- [ ] QR-Code (GRBZ-Etikett) → korrekt
+- [ ] Code-128-Inventaretikett (GRBZ-INV-…) → korrekt
+- [ ] Inventar öffnen, ohne Klick scannen → Ergebnis erscheint
+- [ ] In ein Notizfeld tippen, dann scannen → Text bleibt erhalten
+- [ ] Zwei Codes direkt hintereinander → beide Ergebnisse
+- [ ] Scantaste lange halten / doppelt drücken → nur ein Ergebnis
+- [ ] Flugmodus: scannen und „Bestand −“ buchen → nach WLAN synchronisiert
 
 ## 4. Kamera-Scanning (alle Geräte)
 
