@@ -42,6 +42,22 @@ const waitSynced = async () => page.waitForFunction(() => document.querySelector
 let failed = false;
 try {
   console.log(`E2E gegen ${BASE}`);
+  await step('Vorhandener lokaler Speicher mit höherer Version / fehlenden Bereichen startet fehlerfrei', async () => {
+    await page.goto(BASE + '/');
+    await page.evaluate(() => new Promise((res, rej) => {
+      indexedDB.deleteDatabase('grbz-fms').onsuccess = () => {
+        const r = indexedDB.open('grbz-fms', 7);
+        r.onupgradeneeded = () => r.result.createObjectStore('meta', { keyPath: 'key' });
+        r.onsuccess = () => { r.result.close(); res(); };
+        r.onerror = () => rej(r.error);
+      };
+    }));
+    await page.reload();
+    await page.waitForSelector('#login-email', { timeout: 10000 });
+    const stores = await page.evaluate(() => new Promise((res) => { const r = indexedDB.open('grbz-fms'); r.onsuccess = () => { res([r.result.version, r.result.objectStoreNames.length]); r.result.close(); }; }));
+    assert(stores[0] === 8 && stores[1] > 40, `Speicher nicht nachgerüstet: Version ${stores[0]}, ${stores[1]} Bereiche`);
+  });
+
   await step('Anmeldung mit Pflicht-Passwortwechsel', async () => {
     await page.goto(BASE + '/');
     await page.fill('#login-email', ADMIN.email);

@@ -2,23 +2,45 @@
 import { SYNC_TABLES } from '/shared/entities.js';
 
 const NAME = 'grbz-fms';
-const VERSION = 1;
+const EXTRA = ['outbox', 'blobs', 'conflicts', 'failed', 'meta'];
 let dbp;
 
+function createStores(db) {
+  for (const t of SYNC_TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
+  if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'n', autoIncrement: true });
+  for (const s of ['blobs', 'conflicts', 'failed']) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
+  if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+}
+
+function openRaw(version) {
+  return new Promise((resolve, reject) => {
+    const req = version ? indexedDB.open(NAME, version) : indexedDB.open(NAME);
+    req.onupgradeneeded = () => createStores(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onversionchange = () => db.close(); // andere Tabs nicht blockieren
+      resolve(db);
+    };
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('Der lokale Speicher ist in einem anderen Tab geöffnet. Bitte andere Tabs der App schließen und neu laden.'));
+  });
+}
+
+/**
+ * Öffnet den lokalen Speicher in der vorhandenen Version (nie mit einer niedrigeren)
+ * und legt fehlende Speicherbereiche – z. B. nach einem App-Update – automatisch an.
+ */
 export function openIdb() {
   if (dbp) return dbp;
-  dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open(NAME, VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      for (const t of SYNC_TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'n', autoIncrement: true });
-      for (const s of ['blobs', 'conflicts', 'failed']) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  dbp = (async () => {
+    const db = await openRaw();
+    const missing = [...SYNC_TABLES, ...EXTRA].filter((s) => !db.objectStoreNames.contains(s));
+    if (!missing.length) return db;
+    const next = db.version + 1;
+    db.close();
+    return openRaw(next);
+  })();
+  dbp.catch(() => { dbp = null; });
   return dbp;
 }
 
